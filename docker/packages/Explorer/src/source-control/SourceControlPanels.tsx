@@ -1,6 +1,6 @@
 import React from 'react';
 
-import type { LiveSession } from '../types/liveSession';
+import type { WebRtcLiveSession } from '../contracts/live';
 import type { NodeControlRecord, SourceControlRecord } from '../types/sourceControl';
 import { buildRuntimeChips } from '../utils/runtimeChips';
 import { buildLiveDeviceInstances, type RuntimeAssetLike } from './buildLiveDeviceInstances';
@@ -17,11 +17,11 @@ type Props = {
   remoteSources: SourceControlRecord[];
   runtimeNodes: NodeControlRecord[];
   runtimeSources: SourceControlRecord[];
-  webRtcLiveSessions: LiveSession[];
+  webRtcLiveSessions: WebRtcLiveSession[];
   runtimeAssets: RuntimeAssetLike[];
   healthyNodes: NodeControlRecord[];
   onOpenDevice: (nodeId: string) => void;
-  onWatchLive: (session: LiveSession) => void;
+  onWatchLive: (session: WebRtcLiveSession) => void;
   onOpenSourceContextMenu: (event: React.MouseEvent, source: SourceControlRecord) => void;
   onOpenRuntimeContextMenu: (event: React.MouseEvent, node: NodeControlRecord) => void;
 };
@@ -49,7 +49,7 @@ export function SourceControlPanels({
     runtimeAssets,
   });
 
-  const webRtcSessionsByNodeId = new Map<string, LiveSession>();
+  const webRtcSessionsByNodeId = new Map<string, WebRtcLiveSession>();
   for (const session of webRtcLiveSessions) {
     if (session.node_id) webRtcSessionsByNodeId.set(session.node_id, session);
   }

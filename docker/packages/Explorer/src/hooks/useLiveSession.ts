@@ -260,26 +260,37 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     return () => cleanup();
   }, [cleanup]);
 
+  const apiRef = useRef(api);
+  apiRef.current = api;
+  const startRecordingRef = useRef(startRecording);
+  startRecordingRef.current = startRecording;
+  const stopRecordingRef = useRef(stopRecording);
+  stopRecordingRef.current = stopRecording;
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
   useEffect(() => {
     if (!session?.session_id) return undefined;
+    const sessionId = session.session_id;
     const interval = window.setInterval(() => {
       if (controlPollBusyRef.current) return;
       controlPollBusyRef.current = true;
-      void api.getLiveSession(session.session_id)
+      void apiRef.current.getLiveSession(sessionId)
         .then((latest) => {
           setSession(latest);
-          if (latest.desired_action === 'start_recording' && state !== 'recording' && state !== 'ending') {
-            void startRecording().then((started) => {
+          const currentState = stateRef.current;
+          if (latest.desired_action === 'start_recording' && currentState !== 'recording' && currentState !== 'ending') {
+            void startRecordingRef.current().then((started) => {
               if (!started) return;
-              return api.acknowledgeLiveSessionControl(latest.session_id, 'start_recording')
+              return apiRef.current.acknowledgeLiveSessionControl(latest.session_id, 'start_recording')
                 .then(setSession)
                 .catch(() => undefined);
             });
           }
-          if (latest.desired_action === 'stop_recording' && state === 'recording') {
-            void stopRecording().then((stopped) => {
+          if (latest.desired_action === 'stop_recording' && currentState === 'recording') {
+            void stopRecordingRef.current().then((stopped) => {
               if (!stopped) return;
-              return api.acknowledgeLiveSessionControl(latest.session_id, 'stop_recording')
+              return apiRef.current.acknowledgeLiveSessionControl(latest.session_id, 'stop_recording')
                 .then(setSession)
                 .catch(() => undefined);
             });
@@ -291,7 +302,7 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
         });
     }, 1000);
     return () => window.clearInterval(interval);
-  }, [api, session?.session_id, startRecording, state, stopRecording]);
+  }, [session?.session_id]);
 
   return {
     state,

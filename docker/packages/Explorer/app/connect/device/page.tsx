@@ -22,10 +22,10 @@ import {
   pruneLegacyNodeIdentityKeys,
   registerWindowName,
   requestExplorerRefresh,
+  subscribeBrowserRuntimeChannel,
   syncBrowserRuntimeNode,
   setActiveRuntimeSession,
   setBrowserRuntimeIdentity,
-  setTabRole,
   stripNodeAuthQueryParams,
 } from '../../../src/lib/browserRuntimeIdentity';
 // CSS import removed – now in layout.tsx
@@ -45,10 +45,9 @@ export default function ConnectDevicePage() {
   const nodeId = queryNodeId || storedNodeId;
   const queryToken = searchParams.get('token');
   useEffect(() => {
-    setTabRole('device');
     registerWindowName('device');
     publishBrowserRuntimeTabActive('device');
-    requestExplorerRefresh('device-mount');
+    requestExplorerRefresh('device-mounted');
     const imported = importNodeAuthFromQuery();
     stripNodeAuthQueryParams();
     const identity = getBrowserRuntimeIdentity(imported.nodeId);
@@ -60,14 +59,21 @@ export default function ConnectDevicePage() {
       tokenSource: imported.tokenSource || identity.tokenSource,
       diagnostics: getBrowserRuntimeIdentityDiagnostics(imported.nodeId || identity.nodeId),
     });
-  }, []);
-  useEffect(() => {
+    const unsubscribe = subscribeBrowserRuntimeChannel((message) => {
+      if (message.type === 'open-request' && message.targetRole === 'device') {
+        publishBrowserRuntimeTabActive('device');
+      }
+    });
     const onFocus = () => {
+      registerWindowName('device');
       publishBrowserRuntimeTabActive('device');
       requestExplorerRefresh('device-focus');
     };
     window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('focus', onFocus);
+    };
   }, []);
 
   useEffect(() => {
@@ -86,15 +92,25 @@ export default function ConnectDevicePage() {
   }, [nodeId, queryNodeId]);
   useEffect(() => {
     if (!nodeId) return;
+    // Prevent concurrent double-registration from React StrictMode's double-invoke.
+    // We track by nodeId so a genuine node change still triggers a fresh sync.
+    if (syncCompletedForNodeRef.current === nodeId) return;
     let cancelled = false;
     const syncNodeRegistration = async () => {
       traceDevice('node-sync:begin', { nodeId });
       try {
         const syncResult = await syncBrowserRuntimeNode(nodeId);
-        if (!cancelled) setHeartbeatState(syncResult.ok ? 'ok' : syncResult.status === 'auth_failed' ? 'auth_failed' : 'skipped-no-token');
+        if (cancelled) return;
+        if (syncResult.ok) {
+          setHeartbeatState('ok');
+          syncCompletedForNodeRef.current = nodeId;
+        } else {
+          setHeartbeatState(syncResult.status === 'auth_failed' ? 'auth_failed' : 'skipped-no-token');
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         if (message.includes('401')) {
+          // Do NOT clear identity or stop camera on auth failure — just surface the state.
           if (!cancelled) setHeartbeatState('auth_failed');
           traceDevice('node-sync:error', { message, nodeSyncStatus: 'auth_failed' });
           return;
@@ -131,11 +147,15 @@ export default function ConnectDevicePage() {
   const viewerPollTimerRef = useRef<number | null>(null);
   const viewerSessionIdRef = useRef<string | null>(null);
   const viewerIdRef = useRef<string>('viewer-default');
+  const viewerAttachingRef = useRef<string | null>(null);
   const [peerStatus, setPeerStatus] = useState<'idle' | 'offer-published' | 'connected' | 'failed'>('idle');
   const [mode, setMode] = useState<'local' | 'remote'>('local');
   const [activeBroadcastSession, setActiveBroadcastSession] = useState<{ session_id: string } | null>(null);
   const [traceEvents, setTraceEvents] = useState<string[]>([]);
   const [heartbeatState, setHeartbeatState] = useState<'ok' | 'skipped-no-token' | 'failed' | 'auth_failed'>('skipped-no-token');
+  // Tracks the last nodeId that completed a successful sync to prevent duplicate
+  // registration races during React StrictMode's double-invoke of effects in dev.
+  const syncCompletedForNodeRef = useRef<string | null>(null);
   const [broadcast, setBroadcast] = useState<BroadcastSnapshot>({
     stage: 'idle', nodeId, selectedDeviceId: null, cameraLabel: null, sessionId: null, sourceKind: null,
     peerStatus: 'idle', waitingForAnswer: false, error: null, updatedAt: Date.now(),
@@ -145,6 +165,15 @@ export default function ConnectDevicePage() {
     if (typeof window === 'undefined') return;
     const current = ((window as any).__explorerLiveFlowDebug || {}) as Record<string, unknown>;
     (window as any).__explorerLiveFlowDebug = {
+      ...current,
+      ...patch,
+      lastUpdatedAt: Date.now(),
+    };
+  }, []);
+  const markBroadcastDebug = useCallback((patch: Record<string, unknown>) => {
+    if (typeof window === 'undefined') return;
+    const current = ((window as any).__connectDeviceBroadcastDebug || {}) as Record<string, unknown>;
+    (window as any).__connectDeviceBroadcastDebug = {
       ...current,
       ...patch,
       lastUpdatedAt: Date.now(),
@@ -273,8 +302,18 @@ export default function ConnectDevicePage() {
     const sessionId = sessionRecord.session_id;
     appendTrace(`peer:create ${sessionId}`);
     traceDevice('peer:create', { sessionId, trackCount: stream.getTracks().length });
+    const videoTrackCount = stream.getVideoTracks().length;
+    const audioTrackCount = stream.getAudioTracks().length;
+    markBroadcastDebug({ nodeId, sessionId, hasStream: true, videoTrackCount, audioTrackCount, offerCreated: false, offerPosted: false });
     if (typeof window === 'undefined' || typeof RTCPeerConnection === 'undefined') {
+      markBroadcastDebug({ lastPeerError: 'rtc_unavailable' });
       setPeerStatus('failed');
+      return;
+    }
+    if (videoTrackCount === 0) {
+      markBroadcastDebug({ lastPeerError: 'no_video_tracks' });
+      setPeerStatus('failed');
+      setBroadcast((prev) => ({ ...prev, stage: 'failed', waitingForAnswer: false, error: makeBroadcastFailure('missing_media_stream', 'no_video_tracks'), updatedAt: Date.now() }));
       return;
     }
     peerConnectionRef.current?.close();
@@ -285,6 +324,7 @@ export default function ConnectDevicePage() {
     activeViewerIdRef.current = 'viewer-broadcast';
     peer.onconnectionstatechange = () => {
       traceDevice('peer:connection-state', { state: peer.connectionState });
+      markBroadcastDebug({ peerConnectionState: peer.connectionState });
       if (peer.connectionState === 'connected') setPeerStatus('connected');
       if (peer.connectionState === 'failed' || peer.connectionState === 'disconnected') setPeerStatus('failed');
     };
@@ -295,12 +335,23 @@ export default function ConnectDevicePage() {
     };
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
-    await api.publishLiveSignalOffer(sessionId, { type: 'offer', sdp: offer.sdp || '' }, nodeId || undefined);
+    markBroadcastDebug({ offerCreated: true });
+    try {
+      await api.publishLiveSignalOffer(sessionId, { type: 'offer', sdp: offer.sdp || '' }, nodeId || undefined);
+      markBroadcastDebug({ offerPosted: true, offerPostStatus: 'ok' });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      markBroadcastDebug({ offerPosted: false, offerPostStatus: message, lastBroadcastError: message });
+      setPeerStatus('failed');
+      setBroadcast((prev) => ({ ...prev, stage: 'failed', waitingForAnswer: false, error: makeBroadcastFailure('offer_publish_failed', err), updatedAt: Date.now() }));
+      throw err;
+    }
     appendTrace(`peer:offer-published ${sessionId}`);
     setPeerStatus('offer-published');
     const live = await ensureLiveBroadcastAlignment({ api, sessionId, nodeId: nodeId || '' });
     if (!live.ok) {
       appendTrace(`peer:api-live-mismatch ${live.reason}`);
+      markBroadcastDebug({ lastBroadcastError: `live_registry_mismatch:${live.reason}` });
       setBroadcast((prev) => ({ ...prev, stage: 'failed', waitingForAnswer: false, error: makeBroadcastFailure('live_registry_mismatch', live.reason), updatedAt: Date.now() }));
       if (live.reason === 'session_not_listed' || live.reason === 'node_mismatch') {
         peer.close();
@@ -312,7 +363,10 @@ export default function ConnectDevicePage() {
     appendTrace('peer:api-live-confirmed');
     setBroadcast((prev) => ({ ...prev, stage: 'waiting_for_answer', waitingForAnswer: true, updatedAt: Date.now() }));
     if (signalPollTimerRef.current != null) window.clearInterval(signalPollTimerRef.current);
+    let signalPollBusy = false;
     signalPollTimerRef.current = window.setInterval(() => {
+      if (signalPollBusy) return;
+      signalPollBusy = true;
       void api.getLiveSignalState(sessionId).then(async (signal) => {
         const activePeer = peerConnectionRef.current;
         if (!activePeer) return;
@@ -328,7 +382,7 @@ export default function ConnectDevicePage() {
           viewerIceSeenRef.current.add(key);
           await activePeer.addIceCandidate(candidate);
         }
-      }).catch(() => undefined);
+      }).catch(() => undefined).finally(() => { signalPollBusy = false; });
     }, 1000);
   };
 
@@ -362,7 +416,17 @@ export default function ConnectDevicePage() {
         enabled: track.enabled,
       })) ?? [],
     });
-    if (!stream) throw new Error('camera_stream_not_ready');
+    if (!stream) {
+      markBroadcastDebug({ cameraReady: false, hasStream: false, lastBroadcastError: 'camera_stream_not_ready' });
+      throw new Error('camera_stream_not_ready');
+    }
+    markBroadcastDebug({
+      nodeId,
+      cameraReady: true,
+      hasStream: true,
+      videoTrackCount: stream.getVideoTracks().length,
+      audioTrackCount: stream.getAudioTracks().length,
+    });
     markLiveFlowStep({ deviceCameraReadyAt: Date.now() });
     setBroadcast((prev) => ({ ...prev, stage: 'camera_ready', updatedAt: Date.now() }));
     await bindPreviewStream(stream);
@@ -406,8 +470,9 @@ export default function ConnectDevicePage() {
       await publishPeerOffer(nextSession, stream);
     } catch (err) {
       appendTrace('peer:offer-failed');
+      markBroadcastDebug({ lastBroadcastError: err instanceof Error ? err.message : String(err) });
       setPeerStatus('failed');
-      setBroadcast((prev) => ({ ...prev, stage: 'failed', waitingForAnswer: false, error: makeBroadcastFailure('peer_offer_failed', err instanceof Error ? err.message : String(err)), updatedAt: Date.now() }));
+      setBroadcast((prev) => ({ ...prev, stage: 'failed', waitingForAnswer: false, error: makeBroadcastFailure('peer_connection_failed', err instanceof Error ? err.message : String(err)), updatedAt: Date.now() }));
       return false;
     }
     return true;
@@ -419,6 +484,9 @@ export default function ConnectDevicePage() {
 
   async function watchLiveSession(sessionRecord: { session_id: string }): Promise<void> {
     const sessionId = sessionRecord.session_id;
+    if (viewerAttachingRef.current === sessionId) return;
+    if (viewerSessionIdRef.current === sessionId && viewerPeerRef.current) return;
+    viewerAttachingRef.current = sessionId;
     appendTrace(`viewer:watch ${sessionId}`);
     setMode('remote');
     if (viewerPollTimerRef.current != null) {
@@ -431,12 +499,19 @@ export default function ConnectDevicePage() {
     viewerIdRef.current = `viewer-${Date.now().toString(36)}`;
     if (typeof window === 'undefined' || typeof RTCPeerConnection === 'undefined') {
       setPeerStatus('failed');
+      viewerAttachingRef.current = null;
       return;
     }
 
-    const offer = await api.getLiveOffer(sessionId).catch(() => null);
+    let offer: RTCSessionDescriptionInit | null = null;
+    for (let attempt = 0; attempt < 10 && !offer?.sdp; attempt++) {
+      if (viewerSessionIdRef.current !== sessionId) { viewerAttachingRef.current = null; return; }
+      offer = await api.getLiveOffer(sessionId).catch(() => null);
+      if (!offer?.sdp && attempt < 9) await new Promise<void>((res) => setTimeout(res, 500));
+    }
     if (!offer?.sdp) {
       setPeerStatus('failed');
+      viewerAttachingRef.current = null;
       return;
     }
 
@@ -477,6 +552,7 @@ export default function ConnectDevicePage() {
         }
       }).catch(() => undefined);
     }, 1000);
+    viewerAttachingRef.current = null;
   }
 
   const handleUseSelectedLocalDevice = async () => {

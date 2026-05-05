@@ -1,10 +1,18 @@
 export type BrowserRuntimeTabRole = 'explorer' | 'device' | 'unknown';
 export type NodeIdentityTokenSource = 'node-specific' | 'capture' | 'generic' | 'query' | 'none';
-export type BrowserRuntimeUiMessageType = 'identity' | 'session' | 'tab-active' | 'request-refresh';
 export type BrowserRuntimeAuth = { nodeId: string; token: string; tokenSource: string };
 export type BrowserRuntimeHeartbeatResult =
   | { ok: true; status: 'online' }
   | { ok: false; status: 'auth_failed' | 'unavailable'; message: string };
+
+export type BrowserRuntimeUiMessage =
+  | { type: 'tab-active'; role: BrowserRuntimeTabRole; windowName: string; path: string; at: number }
+  | { type: 'open-request'; targetRole: BrowserRuntimeTabRole; url: string; reason: string; at: number }
+  | { type: 'request-refresh'; reason: string; role: BrowserRuntimeTabRole; at: number }
+  | { type: 'session'; nodeId: string | null; sessionId: string | null; role: BrowserRuntimeTabRole; at: number }
+  | { type: 'identity'; nodeId: string | null; hasToken: boolean; tokenSource: string; at: number };
+
+export type BrowserRuntimeUiMessageType = BrowserRuntimeUiMessage['type'];
 
 const CAPTURE_NODE_ID_KEY = 'explorer_capture_node_id';
 const GENERIC_NODE_ID_KEY = 'explorer_node_id';
@@ -14,8 +22,8 @@ const TAB_ROLE_KEY = 'explorer_tab_role';
 const ACTIVE_SESSION_ID_KEY = 'explorer_active_session_id';
 const ACTIVE_NODE_ID_KEY = 'explorer_active_node_id';
 const CHANNEL_NAME = 'thatdamtoolbox-ui';
-export const EXPLORER_WINDOW_NAME = 'thatdamtoolbox-explorer';
-export const CONNECT_DEVICE_WINDOW_NAME = 'thatdamtoolbox-connect-device';
+export const EXPLORER_WINDOW_NAME = 'thatdamtoolbox:explorer';
+export const CONNECT_DEVICE_WINDOW_NAME = 'thatdamtoolbox:connect-device';
 
 const canUseStorage = () => typeof window !== 'undefined' && !!window.localStorage;
 const canUseSessionStorage = () => typeof window !== 'undefined' && !!window.sessionStorage;
@@ -77,7 +85,14 @@ export const registerBrowserRuntime = async (payload: Record<string, unknown>): 
   publishBrowserRuntimeDebug({ lastRegisterStatus: response.status, lastRegisterNodeId: String(payload.node_id || '') });
   if (!response.ok) throw new Error(`register failed:${response.status}`);
   const next = await response.json();
-  return { nodeId: String(next?.node_id || payload.node_id || ''), token: typeof next?.token === 'string' ? next.token : undefined };
+  // RegisterNodeResponse places the issued bearer token at `auth.token`; older callers
+  // also occasionally surface it at the top level, so fall back for compatibility.
+  const token = typeof next?.auth?.token === 'string'
+    ? next.auth.token
+    : typeof next?.token === 'string'
+      ? next.token
+      : undefined;
+  return { nodeId: String(next?.node_id || payload.node_id || ''), token };
 };
 export const syncBrowserRuntimeNode = async (nodeId: string): Promise<BrowserRuntimeHeartbeatResult> => {
   publishBrowserRuntimeDebug({ lastSyncPhase: 'list-nodes', lastNodeId: nodeId });
@@ -87,7 +102,7 @@ export const syncBrowserRuntimeNode = async (nodeId: string): Promise<BrowserRun
     const exists = Array.isArray(nodes) && nodes.some((entry) => entry?.node_id === nodeId);
     if (!exists) {
       publishBrowserRuntimeDebug({ lastSyncPhase: 'register-missing-node', lastNodeId: nodeId });
-      await registerBrowserRuntime({
+      const registration = await registerBrowserRuntime({
         node_id: nodeId,
         label: `${nodeId} Capture Node`,
         base_url: null,
@@ -100,6 +115,13 @@ export const syncBrowserRuntimeNode = async (nodeId: string): Promise<BrowserRun
         ephemeral: true,
         metadata: { session_node: 'true', browser_push: 'true', origin: 'browser' },
       });
+      // Persist the issued bearer token so the subsequent heartbeat (and every later
+      // heartbeat/auth call) uses the node-scoped token instead of any stale value.
+      if (registration.token) {
+        setStoredNodeToken(nodeId, registration.token);
+        setBrowserRuntimeIdentity(nodeId, registration.token);
+        publishBrowserRuntimeDebug({ lastRegisterTokenSource: 'registration', lastRegisterTokenLength: registration.token.length });
+      }
     }
     publishBrowserRuntimeDebug({ lastSyncPhase: 'heartbeat', lastNodeId: nodeId });
     return await heartbeatBrowserRuntime(nodeId);
@@ -116,7 +138,7 @@ export const setActiveRuntimeSession = (sessionId: string | null, nodeId?: strin
   if (!canUseSessionStorage()) return;
   if (sessionId) window.sessionStorage.setItem(ACTIVE_SESSION_ID_KEY, sessionId); else window.sessionStorage.removeItem(ACTIVE_SESSION_ID_KEY);
   if (nodeId) window.sessionStorage.setItem(ACTIVE_NODE_ID_KEY, nodeId); else if (!sessionId) window.sessionStorage.removeItem(ACTIVE_NODE_ID_KEY);
-  publishBrowserRuntimeSession(sessionId, nodeId);
+  postUiMessage({ type: 'session', nodeId: nodeId || getStoredNodeId(), sessionId, role: getTabRole(), at: Date.now() });
 };
 export const getBrowserRuntimeIdentityDiagnostics = (nodeIdOverride?: string | null) => {
   const identity = getBrowserRuntimeIdentity(nodeIdOverride);
@@ -127,8 +149,17 @@ export const getBrowserRuntimeIdentityDiagnostics = (nodeIdOverride?: string | n
 export function importNodeAuthFromQuery(search = typeof window !== 'undefined' ? window.location.search : '') { const params = new URLSearchParams(search); const nodeId = params.get('node_id') || params.get('nodeId'); const token = params.get('token') || params.get('node_token') || params.get('bearer_token'); if (!nodeId) return { imported: false, nodeId: null, tokenSource: 'none' as NodeIdentityTokenSource }; setStoredNodeId(nodeId); if (token) { setStoredNodeToken(nodeId, token); publishBrowserRuntimeIdentity(); return { imported: true, nodeId, tokenSource: 'query' as NodeIdentityTokenSource }; } publishBrowserRuntimeIdentity(); return { imported: true, nodeId, tokenSource: getStoredNodeToken(nodeId).source }; }
 export function stripNodeAuthQueryParams(): void { if (typeof window === 'undefined') return; const url = new URL(window.location.href); let changed = false; for (const key of ['token', 'node_token', 'bearer_token']) { if (url.searchParams.has(key)) { url.searchParams.delete(key); changed = true; } } if (changed) window.history.replaceState(window.history.state, document.title, `${url.pathname}${url.search}${url.hash}`); }
 
+export const getWindowNameForRole = (role: BrowserRuntimeTabRole): string => {
+  if (role === 'explorer') return EXPLORER_WINDOW_NAME;
+  if (role === 'device') return CONNECT_DEVICE_WINDOW_NAME;
+  return 'thatdamtoolbox:unknown';
+};
+export const getCurrentPathForTab = (): string => {
+  if (typeof window === 'undefined') return '/';
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+};
 const openChannel = (): BroadcastChannel | null => (typeof window !== 'undefined' && typeof window.BroadcastChannel !== 'undefined' ? new BroadcastChannel(CHANNEL_NAME) : null);
-const postUiMessage = (message: Record<string, unknown>): void => {
+const postUiMessage = (message: BrowserRuntimeUiMessage): void => {
   const channel = openChannel();
   if (!channel) return;
   channel.postMessage(message);
@@ -144,23 +175,33 @@ const openNamedWindow = (url: string, windowName: string): Window | null => {
   if (target) target.focus?.();
   return target;
 };
-export const publishBrowserRuntimeIdentity = (): void => { const identity = getBrowserRuntimeIdentity(); postUiMessage({ type: 'identity', nodeId: identity.nodeId, hasToken: Boolean(identity.token), tokenSource: identity.tokenSource }); };
-export const publishBrowserRuntimeSession = (sessionId: string | null, nodeId?: string | null): void => { postUiMessage({ type: 'session', nodeId: nodeId || getStoredNodeId(), sessionId, role: getTabRole() }); };
+export const publishBrowserRuntimeIdentity = (): void => { const identity = getBrowserRuntimeIdentity(); postUiMessage({ type: 'identity', nodeId: identity.nodeId, hasToken: Boolean(identity.token), tokenSource: identity.tokenSource, at: Date.now() }); };
+export const publishBrowserRuntimeSession = (sessionId: string | null, nodeId?: string | null): void => { postUiMessage({ type: 'session', nodeId: nodeId || getStoredNodeId(), sessionId, role: getTabRole(), at: Date.now() }); };
 export const publishBrowserRuntimeTabActive = (role: BrowserRuntimeTabRole): void => {
-  postUiMessage({ type: 'tab-active', role, at: Date.now() });
+  if (typeof window === 'undefined') return;
+  postUiMessage({ type: 'tab-active', role, windowName: window.name || getWindowNameForRole(role), path: getCurrentPathForTab(), at: Date.now() });
 };
 export const requestExplorerRefresh = (reason = 'device-focus'): void => {
-  postUiMessage({ type: 'request-refresh', reason, at: Date.now(), role: getTabRole() });
+  postUiMessage({ type: 'request-refresh', reason, role: getTabRole(), at: Date.now() });
 };
-export const subscribeBrowserRuntimeChannel = (onMessage: (message: any) => void): (() => void) => { const channel = openChannel(); if (!channel) return () => undefined; channel.onmessage = (event) => onMessage(event.data); return () => channel.close(); };
+export const subscribeBrowserRuntimeChannel = (onMessage: (message: BrowserRuntimeUiMessage) => void): (() => void) => { const channel = openChannel(); if (!channel) return () => undefined; channel.onmessage = (event) => onMessage(event.data as BrowserRuntimeUiMessage); return () => channel.close(); };
 
 export const buildOpenDeviceUrl = (basePath = '/connect/device', nodeIdOverride?: string | null): string => { const identity = getBrowserRuntimeIdentity(nodeIdOverride); const params = new URLSearchParams(); if (identity.nodeId) params.set('node_id', identity.nodeId); if (identity.token) params.set('token', identity.token); const query = params.toString(); return query ? `${basePath}?${query}` : basePath; };
-export const openDeviceTab = (nodeId?: string | null): void => { openNamedWindow(buildOpenDeviceUrl('/connect/device', nodeId), CONNECT_DEVICE_WINDOW_NAME); };
-export const openExplorerTab = (path = '/'): void => { openNamedWindow(path, EXPLORER_WINDOW_NAME); };
+export const openDeviceTab = (nodeId?: string | null): void => {
+  const url = buildOpenDeviceUrl('/connect/device', nodeId);
+  postUiMessage({ type: 'open-request', targetRole: 'device', url, reason: 'open-device', at: Date.now() });
+  openNamedWindow(url, CONNECT_DEVICE_WINDOW_NAME);
+};
+export const openExplorerTab = (path = '/'): void => {
+  postUiMessage({ type: 'open-request', targetRole: 'explorer', url: path, reason: 'open-explorer', at: Date.now() });
+  openNamedWindow(path, EXPLORER_WINDOW_NAME);
+};
 export const registerWindowName = (role: BrowserRuntimeTabRole): void => {
   if (typeof window === 'undefined') return;
-  if (role === 'explorer') window.name = EXPLORER_WINDOW_NAME;
-  if (role === 'device') window.name = CONNECT_DEVICE_WINDOW_NAME;
+  const expected = getWindowNameForRole(role);
+  if (window.name !== expected) window.name = expected;
+  setTabRole(role);
+  postUiMessage({ type: 'tab-active', role, windowName: expected, path: getCurrentPathForTab(), at: Date.now() });
 };
 export const pruneLegacyNodeIdentityKeys = (): void => {
   if (!canUseStorage()) return;

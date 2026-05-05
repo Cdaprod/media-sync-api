@@ -1,6 +1,6 @@
 import React from 'react';
 
-import type { LiveSession } from '../types/liveSession';
+import type { WebRtcLiveSession } from '../contracts/live';
 import type { NodeControlRecord } from '../types/sourceControl';
 import { isTestPayloadNode } from '../utils/runtimeLabels';
 
@@ -8,7 +8,7 @@ type RuntimeChip = { label: string; tone: string };
 
 type Props = {
   node: NodeControlRecord;
-  liveSession: LiveSession | undefined;
+  liveSession: WebRtcLiveSession | undefined;
   chips: RuntimeChip[];
   onContextMenu: (event: React.MouseEvent, node: NodeControlRecord) => void;
 };

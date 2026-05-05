@@ -493,7 +493,7 @@ export function createApiClient(baseUrl = ''): ApiClient {
       return response.json();
     },
     async publishLiveSignalAnswer(sessionId: string, viewerId: string, answer: LiveSignalDescription, nodeId?: string): Promise<LiveSignalState> {
-      const authHeaders = requireNodeAuthHeaders(nodeId);
+      const authHeaders = getNodeAuthHeaders(nodeId);
       const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/signal/answer`), {
         method: 'POST',
         headers: {
@@ -510,7 +510,7 @@ export function createApiClient(baseUrl = ''): ApiClient {
       return response.json();
     },
     async publishLiveSignalIce(sessionId: string, role: LiveSignalRole, viewerId: string, candidate: LiveSignalIceCandidate, nodeId?: string): Promise<LiveSignalState> {
-      const authHeaders = requireNodeAuthHeaders(nodeId);
+      const authHeaders = role === 'device' ? requireNodeAuthHeaders(nodeId) : getNodeAuthHeaders(nodeId);
       const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/signal/ice`), {
         method: 'POST',
         headers: {

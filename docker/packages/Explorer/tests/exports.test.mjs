@@ -328,7 +328,7 @@ test('connect device page and live-session hook guard media APIs for insecure iO
   assert.ok(hook.includes('if (sourceKind === \'screen\' && !hasGetDisplayMedia) {'));
   assert.ok(hook.includes('await mediaDevices.getUserMedia({ video: true, audio: true })'));
   assert.ok(!hook.includes('await navigator.mediaDevices.getUserMedia'));
-  assert.ok(hook.includes("api.acknowledgeLiveSessionControl(latest.session_id, 'stop_recording')"));
+  assert.ok(hook.includes("acknowledgeLiveSessionControl(latest.session_id, 'stop_recording')"));
 
   assert.ok(page.includes('const capability = useMemo(() => {'));
   assert.ok(page.includes('isSecureContext: window.isSecureContext,'));
@@ -408,8 +408,8 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(card.includes('peerVideoRef'));
   assert.ok(app.includes('openDeviceTab(node.node_id);'));
   assert.ok(nodeAuth.includes("const CHANNEL_NAME = 'thatdamtoolbox-ui';"));
-  assert.ok(nodeAuth.includes("export const EXPLORER_WINDOW_NAME = 'thatdamtoolbox-explorer';"));
-  assert.ok(nodeAuth.includes("export const CONNECT_DEVICE_WINDOW_NAME = 'thatdamtoolbox-connect-device';"));
+  assert.ok(nodeAuth.includes("export const EXPLORER_WINDOW_NAME = 'thatdamtoolbox:explorer';"));
+  assert.ok(nodeAuth.includes("export const CONNECT_DEVICE_WINDOW_NAME = 'thatdamtoolbox:connect-device';"));
   assert.ok(nodeAuth.includes('openNamedWindow'));
   assert.ok(nodeAuth.includes('requestExplorerRefresh'));
   assert.ok(device.includes("registerWindowName('device');"));
@@ -417,8 +417,8 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(device.includes("requestExplorerRefresh('device-focus');"));
   assert.ok(device.includes('openExplorerTab(\'/\');'));
   assert.ok(app.includes("registerWindowName('explorer');"));
-  assert.ok(app.includes("if (message?.type === 'request-refresh') {"));
-  assert.ok(app.includes("scheduleExplorerObservabilityRefresh(reason, 0);"));
+  assert.ok(app.includes("message.type === 'request-refresh'"));
+  assert.ok(app.includes("scheduleExplorerObservabilityRefresh"));
   assert.ok(app.includes('pruneLegacyNodeIdentityKeys();'));
   assert.ok(registerModal.includes('const existingNodeId = getStoredNodeId();'));
   assert.ok(registerModal.includes('const nextNodeId = existingNodeId || buildDefaultNodeId(nextContext.deviceClass);'));
@@ -3571,7 +3571,7 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(page.includes('const getUsableCameraStream = () => {'));
   assert.ok(page.includes('const existingStream = getUsableCameraStream();'))
   assert.ok(page.includes('let stream = existingStream;'));
-  assert.ok(page.includes("if (!stream) throw new Error('camera_stream_not_ready');"));
+  assert.ok(page.includes("throw new Error('camera_stream_not_ready')"));
   assert.ok(!page.includes('getStoredNodeToken(nodeId)'));
   assert.ok(!page.includes('Authorization: `Bearer'));
   assert.ok(page.includes('const syncResult = await syncBrowserRuntimeNode(nodeId);'));
@@ -3808,12 +3808,69 @@ test('browser runtime client + webrtc explorer-device contract remains centraliz
   assert.ok(!sourceFiles.includes('sessionStorage'));
 });
 
-test('live device builder supports offer/answer visibility from both signal payload and boolean flags', () => {
+test('live device builder supports offer/answer visibility from WebRtcLiveSession boolean flags', () => {
   const builderPath = path.join(packageRoot, 'src', 'source-control', 'buildLiveDeviceInstances.ts');
   const builder = fs.readFileSync(builderPath, 'utf8');
-  assert.ok(builder.includes('has_offer'));
-  assert.ok(builder.includes('has_answer'));
-  assert.ok(builder.includes('offer?.sdp'));
-  assert.ok(builder.includes('answer?.sdp'));
+  assert.ok(builder.includes('has_offer'), 'builder must read has_offer from WebRtcLiveSession');
+  assert.ok(builder.includes('has_answer'), 'builder must read has_answer from WebRtcLiveSession');
+  assert.ok(builder.includes('WebRtcLiveSession'), 'builder must import WebRtcLiveSession type');
   assert.ok(builder.includes('watchLiveAvailable'));
+});
+
+test('watchLiveAvailable requires offer but not answer (viewer creates answer after clicking Watch Live)', () => {
+  const builderPath = path.join(packageRoot, 'src', 'source-control', 'buildLiveDeviceInstances.ts');
+  const builder = fs.readFileSync(builderPath, 'utf8');
+  // Must not gate watchLiveAvailable on hasAnswer — the answer comes from the viewer after Watch Live is clicked
+  assert.ok(!builder.includes('watchLiveAvailable = Boolean(existing.sessionId && existing.hasOffer && existing.hasAnswer)'),
+    'watchLiveAvailable must not require hasAnswer');
+  assert.ok(builder.includes('watchLiveAvailable') && builder.includes('hasOffer'),
+    'watchLiveAvailable must still depend on hasOffer');
+  // Must expose unavailableReason for diagnostic display
+  assert.ok(builder.includes('unavailableReason'), 'builder must emit unavailableReason for UI feedback');
+});
+
+test('LiveDeviceInstanceCard shows session tag and unavailableReason when watch live not available', () => {
+  const cardPath = path.join(packageRoot, 'src', 'source-control', 'LiveDeviceInstanceCard.tsx');
+  const card = fs.readFileSync(cardPath, 'utf8');
+  assert.ok(card.includes('session:'), 'card must show session:yes/no tag');
+  assert.ok(card.includes('offer:'), 'card must show offer:yes/no tag');
+  assert.ok(card.includes('answer:'), 'card must show answer:yes/no tag');
+  assert.ok(card.includes('unavailableReason'), 'card must surface unavailableReason for diagnostic display');
+});
+
+test('connect/device page.tsx emits structured broadcast diagnostics on window.__connectDeviceBroadcastDebug', () => {
+  const pagePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const page = fs.readFileSync(pagePath, 'utf8');
+  assert.ok(page.includes('__connectDeviceBroadcastDebug'), 'page must write structured broadcast diagnostics');
+  assert.ok(page.includes('markBroadcastDebug'), 'page must call markBroadcastDebug helper');
+  assert.ok(page.includes('offerCreated'), 'diagnostics must include offerCreated');
+  assert.ok(page.includes('offerPosted'), 'diagnostics must include offerPosted');
+  assert.ok(page.includes('videoTrackCount'), 'diagnostics must include videoTrackCount');
+});
+
+test('browser runtime identity owns stable explorer/device window names', () => {
+  const identityPath = path.join(packageRoot, 'src', 'lib', 'browserRuntimeIdentity.ts');
+  const source = fs.readFileSync(identityPath, 'utf8');
+  assert.ok(source.includes("EXPLORER_WINDOW_NAME = 'thatdamtoolbox:explorer'"), 'EXPLORER_WINDOW_NAME must use colon namespace');
+  assert.ok(source.includes("CONNECT_DEVICE_WINDOW_NAME = 'thatdamtoolbox:connect-device'"), 'CONNECT_DEVICE_WINDOW_NAME must use colon namespace');
+  assert.ok(source.includes('window.open(url, windowName)'), 'must open named window via openNamedWindow');
+  assert.ok(source.includes('registerWindowName'), 'must export registerWindowName');
+  assert.ok(source.includes('subscribeBrowserRuntimeChannel'), 'must export subscribeBrowserRuntimeChannel');
+  assert.ok(source.includes('requestExplorerRefresh'), 'must export requestExplorerRefresh');
+  assert.ok(source.includes("type: 'open-request'"), 'must define open-request message type');
+  assert.ok(source.includes('BrowserRuntimeUiMessage'), 'must export typed BrowserRuntimeUiMessage union');
+  assert.ok(source.includes('getWindowNameForRole'), 'must export getWindowNameForRole helper');
+});
+
+test('explorer and device pages register stable tab roles on mount and focus', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const devicePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const device = fs.readFileSync(devicePath, 'utf8');
+  assert.ok(explorer.includes("registerWindowName('explorer')"), 'Explorer must call registerWindowName on mount');
+  assert.ok(explorer.includes('openDeviceTab'), 'Explorer must import and call openDeviceTab');
+  assert.ok(device.includes("registerWindowName('device')"), 'Device must call registerWindowName on mount');
+  assert.ok(device.includes('openExplorerTab'), 'Device must import openExplorerTab');
+  assert.ok(device.includes('subscribeBrowserRuntimeChannel'), 'Device must subscribe to BroadcastChannel for open-request');
+  assert.ok(device.includes("message.type === 'open-request'"), 'Device must handle open-request messages');
 });

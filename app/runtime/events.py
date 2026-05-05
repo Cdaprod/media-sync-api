@@ -19,7 +19,7 @@ class RuntimeEvent:
     id: int
     type: str
     payload: dict[str, Any]
-    created_at: str
+    ts: str
 
 
 class RuntimeEventBus:
@@ -33,7 +33,7 @@ class RuntimeEventBus:
             id=self._next_id,
             type=event_type,
             payload=dict(payload),
-            created_at=datetime.now(timezone.utc).isoformat(),
+            ts=datetime.now(timezone.utc).isoformat(),
         )
         self._next_id += 1
         self._history.append(event)

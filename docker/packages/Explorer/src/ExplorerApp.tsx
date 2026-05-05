@@ -40,7 +40,7 @@ import { LivePreview } from './components/live/LivePreview';
 import { RegisterNodeModal } from './components/RegisterNodeModal';
 import { RuntimeDetailsModal } from './components/RuntimeDetailsModal';
 import { normalizePreviewAsset } from './previewAdapter';
-import { openDeviceTab, pruneLegacyNodeIdentityKeys, registerWindowName, setTabRole, subscribeBrowserRuntimeChannel } from './lib/browserRuntimeIdentity';
+import { openDeviceTab, pruneLegacyNodeIdentityKeys, registerWindowName, subscribeBrowserRuntimeChannel } from './lib/browserRuntimeIdentity';
 import { absoluteAssetUrl, getBestDownloadUrl, getBestStreamUrl } from './utils/mediaUrls';
 import {
   absolutizeNonAssetUrl,
@@ -52,6 +52,8 @@ import { useThumbnailQueue } from './hooks/useThumbnailQueue';
 import { useTopbarScrollState } from './hooks/useTopbarScrollState';
 import { useSourceControlData } from './hooks/useSourceControlData';
 import { useLiveSessions } from './hooks/useLiveSessions';
+import type { LiveSession } from './types/liveSession';
+import type { WebRtcLiveSession } from './contracts/live';
 import { useRuntimeController } from './runtime/useRuntimeController';
 import { useLivePreviewState } from './runtime/useLivePreviewState';
 import { useRuntimeEventReactions } from './runtime/useRuntimeEventReactions';
@@ -700,6 +702,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   const [hiddenIngestClaimIds, setHiddenIngestClaimIds] = useState<Set<string>>(new Set());
   const liveClaimRefreshRef = useRef<string | null>(null);
   const [runtimeAssets, setRuntimeAssets] = useState<Array<Record<string, unknown>>>([]);
+  const [peerEnabledSessions, setPeerEnabledSessions] = useState<ReadonlySet<string>>(new Set());
   const controlPlaneRefreshDebounceRef = useRef<number | null>(null);
 
   // ---------------------------------------------------------------------------
@@ -3372,27 +3375,39 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
   }, [webRtcSessionsByNodeId]);
 
   useEffect(() => {
-    setTabRole('explorer');
     registerWindowName('explorer');
     pruneLegacyNodeIdentityKeys();
-    return subscribeBrowserRuntimeChannel((message) => {
-      console.debug('[browser-runtime] channel', message);
-      if (message?.type === 'session' || message?.type === 'identity') {
+    const unsubscribe = subscribeBrowserRuntimeChannel((message) => {
+      if (message.type === 'session' || message.type === 'identity') {
         scheduleExplorerObservabilityRefresh('runtime-channel', 900);
       }
-      if (message?.type === 'tab-active' && process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
+      if (message.type === 'tab-active' && process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
         (window as any).__explorerPollingDebug = {
           ...((window as any).__explorerPollingDebug || {}),
-          lastTabSeen: message?.role || 'unknown',
-          lastTabInteraction: Number(message?.at || Date.now()),
+          lastTabSeen: message.role,
+          lastTabPath: message.path,
+          lastTabSeenAt: message.at,
         };
         setExplorerPollingDebugTick((x) => x + 1);
       }
-      if (message?.type === 'request-refresh') {
-        const reason = typeof message?.reason === 'string' ? message.reason : 'device-focus';
-        scheduleExplorerObservabilityRefresh(reason, 0);
+      if (message.type === 'request-refresh') {
+        scheduleExplorerObservabilityRefresh(message.reason || 'device-focus', 0);
+      }
+      if (message.type === 'session' && process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
+        (window as any).__explorerLiveFlowDebug = {
+          ...((window as any).__explorerLiveFlowDebug || {}),
+          lastSessionMessageAt: message.at,
+          lastSessionNodeId: message.nodeId,
+          lastSessionId: message.sessionId,
+        };
       }
     });
+    const onFocus = () => registerWindowName('explorer');
+    window.addEventListener('focus', onFocus);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('focus', onFocus);
+    };
   }, [scheduleExplorerObservabilityRefresh, explorerPollingDebugTick]);
 
   const openDeviceForNode = useCallback((node: NodeControlRecord) => {
@@ -3423,6 +3438,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
     window.location.href = getDeviceUrl(nodeId);
   }, [openDeviceForNode, resolveNodeRecord]);
+
+  const openLivePeerViewer = useCallback((session: WebRtcLiveSession) => {
+    setPeerEnabledSessions((prev) => {
+      if (prev.has(session.session_id)) return prev;
+      const next = new Set(prev);
+      next.add(session.session_id);
+      return next;
+    });
+    // Always reload: SSE payloads are partial and may lack `status`, leaving
+    // LiveSourceCard.isActive false and blocking peer viewer startup.
+    void reloadLiveSessions();
+  }, [reloadLiveSessions]);
 
   const heartbeatNodeNow = useCallback(async (nodeId: string) => {
     try {
@@ -5381,6 +5408,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                           <LiveSourceCard
                             session={session}
                             apiBase={resolvedApiBase}
+                            autoStartPeer={peerEnabledSessions.has(session.session_id)}
                             onRecordPeerSession={(recordingSessionId) => {
                               void recordPeerSession(session, recordingSessionId);
                             }}

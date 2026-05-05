@@ -18,6 +18,7 @@ export function LiveDeviceInstanceCard({ instance, onOpenDevice, onWatchLive }: 
       {instance.sessionId ? <div className="small">session: {instance.sessionId} ({instance.sessionState || 'unknown'})</div> : null}
       <div className="tagrow">
         {(instance.status === 'auth_failed' || instance.status === 'offline') ? <span className="tag bad">auth_failed</span> : null}
+        <span className={`tag ${instance.sessionId ? 'good' : ''}`}>session:{instance.sessionId ? 'yes' : 'no'}</span>
         <span className={`tag ${instance.hasOffer ? 'good' : ''}`}>offer:{instance.hasOffer ? 'yes' : 'no'}</span>
         <span className={`tag ${instance.hasAnswer ? 'good' : ''}`}>answer:{instance.hasAnswer ? 'yes' : 'no'}</span>
         {instance.runtimeState ? <span className="tag">{instance.runtimeState}</span> : null}
@@ -28,6 +29,8 @@ export function LiveDeviceInstanceCard({ instance, onOpenDevice, onWatchLive }: 
         ) : null}
         {instance.watchLiveAvailable && instance.sessionId ? (
           <button className="btn" type="button" onClick={() => onWatchLive(instance.sessionId!)}>Watch Live</button>
+        ) : instance.sessionId && instance.unavailableReason ? (
+          <div className="small">unavailable: {instance.unavailableReason}</div>
         ) : null}
       </div>
     </div>

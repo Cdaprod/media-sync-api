@@ -197,10 +197,24 @@ class LiveSessionService:
         viewers = state.get("viewers", {})
         target_viewer_id = viewer_id or state.get("primary_viewer_id")
         target = viewers.get(target_viewer_id, {}) if target_viewer_id else {}
+
+        # Device posts ICE under "viewer-broadcast" before learning the actual viewer ID.
+        # Merge those candidates with the viewer-specific slot so viewers always see them.
+        broadcast_device_ice: list[dict] = list(viewers.get("viewer-broadcast", {}).get("ice_from_device", []))
+        viewer_device_ice: list[dict] = list(target.get("ice_from_device", []))
+        seen: set[str] = set()
+        merged_device_ice: list[dict] = []
+        for candidate in broadcast_device_ice + viewer_device_ice:
+            key = _stable_candidate_key(candidate)
+            if key in seen:
+                continue
+            seen.add(key)
+            merged_device_ice.append(candidate)
+
         return {
             "offer": state.get("offer"),
             "answer": target.get("answer"),
-            "ice_from_device": list(target.get("ice_from_device", [])),
+            "ice_from_device": merged_device_ice,
             "ice_from_viewer": list(target.get("ice_from_viewer", [])),
             "viewer_id": target_viewer_id,
             "viewer_ids": sorted(viewers.keys()),

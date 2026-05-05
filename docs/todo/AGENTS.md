@@ -1,3 +1,15 @@
+## 2026-05-03 — Stabilize Explorer and Connect Device tab ownership
+- [x] Changed stable semantic window names to colon-namespaced format: `thatdamtoolbox:explorer` and `thatdamtoolbox:connect-device`.
+- [x] Introduced typed `BrowserRuntimeUiMessage` discriminated union replacing untyped `Record<string, unknown>` channel messages.
+- [x] Added `open-request` message type so Explorer can announce a device open before the named window is created/focused.
+- [x] `registerWindowName` now sets both `window.name` and `sessionStorage` tab role, then posts `tab-active` with windowName + path.
+- [x] Explorer re-registers on `focus` to handle tab reuse across navigations.
+- [x] Connect Device re-registers on `focus` and responds to `open-request` by publishing `tab-active`.
+- [x] `publishBrowserRuntimeTabActive` includes `windowName` and `path` in the message for diagnostics.
+- [x] `openDeviceTab` and `openExplorerTab` now post `open-request` before calling `window.open`.
+- [x] `subscribeBrowserRuntimeChannel` typed to `BrowserRuntimeUiMessage` instead of `any`.
+- [ ] Next: remove token-bearing query strings from named-window navigation once local identity handoff is fully stable.
+
 ## 2026-05-02 — Fix Connect Device render after sidebar extraction
 - [x] Restored `/connect/device` runtime render by re-adding missing `useCallback` import in `app/connect/device/page.tsx`.
 - [x] Verified route static contracts pass with connect-device stack intact.
