@@ -1,3 +1,44 @@
+## 2026-05-05 — Explorer live panel rendering and previewability fix (new)
+- [x] Restored Explorer live panel rendering from the merged durable `/api/live_sessions` + WebRTC signal-session lanes so active offer sessions render even when durable preview chunks are absent.
+- [x] Changed live panel/card previewability indicators to use session/offer/answer/viewer signal availability instead of `latest_chunk_path` or `/preview/latest` success.
+- [x] Added `window.__explorerLivePanelDebug` diagnostics for rendered session ids, hidden reason, selected peer session, preview chunk status, and WebRTC preview availability.
+- [x] Added Explorer static contracts locking live-panel rendering against `latest_chunk_path: null` and preview-204 regressions.
+- [ ] Validate real iPhone flow: Start Live Broadcast creates a rendered Live card with `offer:yes` and Watch Live available before any recording chunk exists.
+
+## 2026-05-05 — Durable live-session registry and device-auth lane fix (new)
+- [x] Restored device-lane auth headers for live offer, device ICE, heartbeat, chunk upload, and end-session calls so active sessions are not pruned after unauthorized heartbeats.
+- [x] Added live-session owner debug headers (`X-Live-Session-Registry-Id`, service id, service-registry id) across start/read/signal/heartbeat routes for registry identity proof.
+- [x] Added backend continuity coverage proving start, read, signal offer/answer/ICE, heartbeat, and post-heartbeat read all use the same live-session registry and do not 404 a new session.
+- [x] Added Explorer stale-session drop handling so 404 signal/answer/ICE responses close the peer, clear polling, remove the session locally, and refresh live lanes.
+- [ ] Validate real iPhone flow: after `peer:api-live-confirmed`, `/api/live_sessions/{session_id}` and `/signal` remain 200 with matching registry debug headers.
+
+## 2026-05-05 — Device live-session start POST regression fix (new)
+- [x] Restored `startLiveSession(...)` to include node bearer headers on `POST /api/live_sessions/start` and added start-method/url/status diagnostics.
+- [x] Guarded `getLiveSession('start')` with `invalid_get_live_session_start` diagnostics so the start sentinel cannot be fetched as a durable session id.
+- [x] Threaded Connect Device broadcast diagnostics for `cameraStreamResolved`, `startLiveSessionSessionId`, `broadcastStatus`, and live video track counts.
+- [x] Added Explorer static contracts preventing GET `/api/live_sessions/start`, `getLiveSession('start')`, and missing device auth on start.
+- [ ] Validate real iPhone flow: `/api/live_sessions/start` is POST 200/JSON, Explorer summary returns to 1 live WebRTC session, and Watch Live appears after offer publication.
+
+## 2026-05-05 — Viewer lane + device stream ownership closure (new)
+- [x] Locked Explorer Watch Live to GET `/signal`, POST `/signal/answer`, POST viewer `/signal/ice`, and added static contracts preventing GET `/signal/answer` or viewer heartbeat leakage.
+- [x] Added `window.__explorerLiveFlowDebug` viewer attach diagnostics for clicked session, offer/answer state, viewer ID, track counts, video playback, and precise failure reasons.
+- [x] Made Connect Device broadcast stream resolution idempotent across camera state and `videoRef.current.srcObject`, with live-track validation before publishing offers.
+- [x] Replaced `camera_stream_not_ready` throw with controlled broadcast failure state and `window.__connectDeviceBroadcastDebug` stream ownership diagnostics.
+- [ ] Validate real iPhone flow: Start Live Broadcast never opens Next.js runtime overlay, and Explorer Watch Live flips answer yes with either `playing` or concrete failureReason.
+
+## 2026-05-05 — Watch Live end-to-end activation hardening (new)
+- [x] Changed `openLivePeerViewer` to hydrate the durable `/api/live_sessions/{id}` record immediately and then reload both durable + WebRTC lanes so Watch Live always has an active `LiveSourceCard` mount target.
+- [x] Upgraded `LiveSourceCard` viewer peer lifecycle states to explicit lane markers (`waiting_for_offer`, `answering`, `answered`, `connected`, `playing`, `failed`) with inline diagnostics.
+- [x] Added immediate signal poll on peer enable and explicit answer-post confirmation marker so answer publishing is not delayed to a later interval tick.
+- [x] Stopped `/preview/latest` polling for non-recording/no-chunk sessions to eliminate repeated 404 preview spam while waiting for viewer attach.
+- [ ] Validate on iPhone Safari: Watch Live must flip `answer:no -> answer:yes` for the same session and show either `playing` or a concrete `diag:` reason.
+
+## 2026-05-05 — Explorer live viewer answer auth hardening (new)
+- [x] Removed node-auth header injection from Explorer viewer answer publication (`publishLiveSignalAnswer`) so browser viewers can post answers without stale/invalid node bearer collisions.
+- [x] Limited viewer ICE publish headers to unauthenticated viewer lane (`role: viewer`), keeping node-auth enforcement only for device ICE lane.
+- [x] Updated `LiveSourceCard` viewer signaling calls to use the viewer lane signatures (no device node-id auth coupling).
+- [ ] Validate on-device that `Watch Live` flips session signal from `answer:no` to `answer:yes` for the same `session_id` without 401s on answer/ICE publish.
+
 ## 2026-05-03 — Stabilize Explorer and Connect Device tab ownership
 - [x] Changed stable semantic window names to colon-namespaced format: `thatdamtoolbox:explorer` and `thatdamtoolbox:connect-device`.
 - [x] Introduced typed `BrowserRuntimeUiMessage` discriminated union replacing untyped `Record<string, unknown>` channel messages.

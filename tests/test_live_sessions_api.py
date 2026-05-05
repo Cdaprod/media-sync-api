@@ -287,3 +287,65 @@ def test_live_session_signal_isolates_multiple_viewers(client):
     assert end.status_code == 200
     after_end_signal = client.get(f"/api/live_sessions/{session_id}/signal", params={"viewer_id": "viewer-a"})
     assert after_end_signal.status_code == 404
+
+def test_live_session_registry_owner_consistent_across_start_read_signal_and_heartbeat(client):
+    node_id, token = _register_node_auth(client, "runner-live-owner")
+    headers = _auth_headers(node_id, token)
+
+    started = client.post(
+        "/api/live_sessions/start",
+        json={"node_id": node_id, "source_kind": "camera", "metadata": {"origin": "owner-test"}},
+        headers=headers,
+    )
+    assert started.status_code == 200
+    session_id = started.json()["session_id"]
+    registry_id = started.headers["x-live-session-registry-id"]
+    service_registry_id = started.headers["x-live-session-service-registry-id"]
+    assert registry_id == service_registry_id
+
+    fetched = client.get(f"/api/live_sessions/{session_id}")
+    assert fetched.status_code == 200
+    assert fetched.headers["x-live-session-registry-id"] == registry_id
+
+    signal_initial = client.get(f"/api/live_sessions/{session_id}/signal", params={"viewer_id": "viewer-owner"})
+    assert signal_initial.status_code == 200
+    assert signal_initial.headers["x-live-session-registry-id"] == registry_id
+
+    offer = client.post(
+        f"/api/live_sessions/{session_id}/signal/offer",
+        json={"offer": {"type": "offer", "sdp": "v=0\r\no=owner-offer"}},
+        headers=headers,
+    )
+    assert offer.status_code == 200
+    assert offer.headers["x-live-session-registry-id"] == registry_id
+
+    signal_after_offer = client.get(f"/api/live_sessions/{session_id}/signal", params={"viewer_id": "viewer-owner"})
+    assert signal_after_offer.status_code == 200
+    assert signal_after_offer.json()["offer"]["sdp"] == "v=0\r\no=owner-offer"
+
+    answer = client.post(
+        f"/api/live_sessions/{session_id}/signal/answer",
+        json={"viewer_id": "viewer-owner", "answer": {"type": "answer", "sdp": "v=0\r\no=owner-answer"}},
+    )
+    assert answer.status_code == 200
+    assert answer.headers["x-live-session-registry-id"] == registry_id
+
+    viewer_ice = client.post(
+        f"/api/live_sessions/{session_id}/signal/ice",
+        json={"role": "viewer", "viewer_id": "viewer-owner", "candidate": {"candidate": "viewer-owner-ice"}},
+    )
+    assert viewer_ice.status_code == 200
+    assert viewer_ice.headers["x-live-session-registry-id"] == registry_id
+
+    signal_after_viewer = client.get(f"/api/live_sessions/{session_id}/signal", params={"viewer_id": "viewer-owner"})
+    assert signal_after_viewer.status_code == 200
+    assert signal_after_viewer.json()["answer"]["sdp"] == "v=0\r\no=owner-answer"
+    assert signal_after_viewer.json()["ice_from_viewer"][0]["candidate"] == "viewer-owner-ice"
+
+    heartbeat = client.post(f"/api/live_sessions/{session_id}/heartbeat", headers=headers)
+    assert heartbeat.status_code == 200
+    assert heartbeat.headers["x-live-session-registry-id"] == registry_id
+
+    fetched_after_heartbeat = client.get(f"/api/live_sessions/{session_id}")
+    assert fetched_after_heartbeat.status_code == 200
+    assert fetched_after_heartbeat.headers["x-live-session-registry-id"] == registry_id

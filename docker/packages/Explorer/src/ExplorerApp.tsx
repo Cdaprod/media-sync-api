@@ -134,6 +134,18 @@ type FocusMeasurementResult = {
   cardRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'> | null;
   viewportRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'> | null;
 };
+function isWebRtcLivePreviewable(session: WebRtcLiveSession): boolean {
+  return Boolean(
+    session.session_id
+      && (
+        session.has_offer
+        || session.has_answer
+        || (session.viewer_count || 0) > 0
+        || (session.state && session.state !== 'inactive')
+      ),
+  );
+}
+
 type FocusMeasurementSnapshot = {
   selectionKey: string;
   fallback: boolean;
@@ -795,6 +807,58 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     waitingByNodeId: waitingWebRtcByNodeId,
     reload: reloadWebRtcLiveSessions,
   } = runtime;
+  const livePanelSessions = useMemo<LiveSession[]>(() => {
+    const bySessionId = new Map<string, LiveSession>();
+    for (const session of liveSessions) {
+      bySessionId.set(session.session_id, session);
+    }
+    for (const session of webRtcLiveSessions) {
+      if (!session.session_id || bySessionId.has(session.session_id)) continue;
+      bySessionId.set(session.session_id, {
+        session_id: session.session_id,
+        node_id: session.node_id || 'unknown-live-node',
+        source_kind: 'camera',
+        status: 'previewing',
+        started_at: session.created_at || session.updated_at || new Date(0).toISOString(),
+        last_heartbeat_at: session.updated_at || session.created_at || new Date(0).toISOString(),
+        chunk_count: 0,
+        claim_id: null,
+        latest_chunk_path: null,
+        metadata: {
+          origin: 'webrtc-live-session',
+          has_offer: Boolean(session.has_offer),
+          has_answer: Boolean(session.has_answer),
+          viewer_count: session.viewer_count || 0,
+          state: session.state || 'inactive',
+        },
+      });
+    }
+    return Array.from(bySessionId.values()).sort((a, b) => a.session_id.localeCompare(b.session_id));
+  }, [liveSessions, webRtcLiveSessions]);
+  const livePanelSignalBySessionId = useMemo(() => {
+    const entries = new Map<string, WebRtcLiveSession>();
+    for (const session of webRtcLiveSessions) {
+      if (session.session_id) entries.set(session.session_id, session);
+    }
+    return entries;
+  }, [webRtcLiveSessions]);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const selectedSessionId = Array.from(peerEnabledSessions)[0] || null;
+    (window as any).__explorerLivePanelDebug = {
+      liveSessionCount: livePanelSessions.length,
+      renderedSessionIds: livePanelSessions.map((session) => session.session_id),
+      hiddenReason: livePanelSessions.length > 0 ? null : 'no_live_sessions',
+      selectedSessionId,
+      hasLiveDeviceInstances: webRtcLiveSessions.length > 0,
+      latestPreviewStatus: livePanelSessions.some((session) => session.latest_chunk_path) ? 'chunk_available' : 'no_recording_chunks',
+      webRtcPreviewAvailable: webRtcLiveSessions.some(isWebRtcLivePreviewable),
+      webRtcPreviewableSessionIds: webRtcLiveSessions
+        .filter(isWebRtcLivePreviewable)
+        .map((session) => session.session_id),
+    };
+  }, [livePanelSessions, peerEnabledSessions, webRtcLiveSessions]);
+
   const reloadRuntimeLiveSessions = useCallback(async () => {
     await Promise.all([
       reloadLiveSessions(),
@@ -3439,17 +3503,56 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     window.location.href = getDeviceUrl(nodeId);
   }, [openDeviceForNode, resolveNodeRecord]);
 
-  const openLivePeerViewer = useCallback((session: WebRtcLiveSession) => {
+  const dropStaleLiveSession = useCallback((sessionId: string, endpoint: string) => {
+    removeLiveSession({ session_id: sessionId });
+    setPeerEnabledSessions((prev) => {
+      if (!prev.has(sessionId)) return prev;
+      const next = new Set(prev);
+      next.delete(sessionId);
+      return next;
+    });
+    if (typeof window !== 'undefined') {
+      const current = ((window as any).__explorerLiveFlowDebug || {}) as Record<string, unknown>;
+      (window as any).__explorerLiveFlowDebug = {
+        ...current,
+        staleSessionDroppedAt: Date.now(),
+        staleSessionId: sessionId,
+        staleSessionEndpoint: endpoint,
+        activeSessionIds: liveSessions.filter((entry) => entry.session_id !== sessionId).map((entry) => entry.session_id),
+        failureReason: 'stale_session_not_found',
+        lastUpdatedAt: Date.now(),
+      };
+    }
+    void Promise.allSettled([reloadLiveSessions(), reloadWebRtcLiveSessions()]);
+  }, [liveSessions, reloadLiveSessions, reloadWebRtcLiveSessions, removeLiveSession]);
+
+  const openLivePeerViewer = useCallback(async (session: WebRtcLiveSession) => {
+    if (typeof window !== 'undefined') {
+      const current = ((window as any).__explorerLiveFlowDebug || {}) as Record<string, unknown>;
+      (window as any).__explorerLiveFlowDebug = {
+        ...current,
+        watchLiveClickedAt: Date.now(),
+        watchLiveSessionId: session.session_id,
+        invalidAnswerGetDetected: false,
+        invalidViewerHeartbeatDetected: false,
+        lastUpdatedAt: Date.now(),
+      };
+    }
     setPeerEnabledSessions((prev) => {
       if (prev.has(session.session_id)) return prev;
       const next = new Set(prev);
       next.add(session.session_id);
       return next;
     });
-    // Always reload: SSE payloads are partial and may lack `status`, leaving
-    // LiveSourceCard.isActive false and blocking peer viewer startup.
-    void reloadLiveSessions();
-  }, [reloadLiveSessions]);
+    try {
+      const durable = await api.getLiveSession(session.session_id);
+      applyLiveSessionUpdate(durable as unknown as Record<string, unknown>);
+    } catch (error) {
+      addToast('warn', 'Watch Live', error instanceof Error ? error.message : 'Unable to load durable live session');
+    }
+    await reloadLiveSessions();
+    await reloadWebRtcLiveSessions();
+  }, [addToast, api, applyLiveSessionUpdate, reloadLiveSessions, reloadWebRtcLiveSessions]);
 
   const heartbeatNodeNow = useCallback(async (nodeId: string) => {
     try {
@@ -5394,7 +5497,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
               )}
             </div>
 
-            {liveSessions.length > 0 ? (
+            {livePanelSessions.length > 0 ? (
               <>
                 <div className="section-h" style={{ borderTop: '1px solid var(--border)' }}>
                   <h2>Live</h2>
@@ -5403,12 +5506,14 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
                   </div>
                 </div>
                 <div className="sources">
-                    {liveSessions.map((session) => (
+                    {livePanelSessions.map((session) => (
                         <div key={session.session_id} onContextMenu={(event) => openLiveSessionContextMenu(event, session)}>
                           <LiveSourceCard
                             session={session}
                             apiBase={resolvedApiBase}
                             autoStartPeer={peerEnabledSessions.has(session.session_id)}
+                            liveSignalSession={livePanelSignalBySessionId.get(session.session_id) ?? null}
+                            onStaleSession={dropStaleLiveSession}
                             onRecordPeerSession={(recordingSessionId) => {
                               void recordPeerSession(session, recordingSessionId);
                             }}

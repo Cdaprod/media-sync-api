@@ -19,9 +19,9 @@ interface ApiShape {
   getLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
   controlLiveSession: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction }>;
   acknowledgeLiveSessionControl: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction }>;
-  heartbeatLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
-  uploadLiveSessionChunk: (sessionId: string, blob: Blob) => Promise<void>;
-  endLiveSession: (sessionId: string) => Promise<{ session: LiveSessionRecord; claim_id: string | null }>;
+  heartbeatLiveSession: (sessionId: string, nodeId?: string | null) => Promise<LiveSessionRecord>;
+  uploadLiveSessionChunk: (sessionId: string, blob: Blob, nodeId?: string | null) => Promise<void>;
+  endLiveSession: (sessionId: string, nodeId?: string | null) => Promise<{ session: LiveSessionRecord; claim_id: string | null }>;
 }
 type PreviewStartOptions = {
   deviceId?: string;
@@ -158,7 +158,7 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
       clearHeartbeat();
       heartbeatTimerRef.current = window.setInterval(() => {
         if (!nextSession.session_id) return;
-        void api.heartbeatLiveSession(nextSession.session_id)
+        void api.heartbeatLiveSession(nextSession.session_id, nextSession.node_id)
           .then(setSession)
           .catch(() => undefined);
       }, 10000);
@@ -192,7 +192,7 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
 
       recorder.addEventListener('dataavailable', (event: BlobEvent) => {
         if (!event.data || event.data.size === 0) return;
-        void api.uploadLiveSessionChunk(session.session_id, event.data);
+        void api.uploadLiveSessionChunk(session.session_id, event.data, session.node_id);
       });
 
       recorder.addEventListener('start', () => {
@@ -225,7 +225,7 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
         });
       }
 
-      const ended = await api.endLiveSession(session.session_id);
+      const ended = await api.endLiveSession(session.session_id, session.node_id);
       setSession(ended.session);
       setLastClaimId(ended.claim_id);
       if (ended.claim_id) {

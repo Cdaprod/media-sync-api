@@ -235,11 +235,58 @@ export default function ConnectDevicePage() {
   }, []);
 
   const shouldShowScreenAction = capability.hasGetDisplayMedia && !capability.isLikelyIOS;
-  const getUsableCameraStream = () => {
-    const stream = camera.stream;
-    if (!stream) return null;
-    const liveVideoTracks = stream.getVideoTracks().filter((track) => track.readyState === 'live');
-    return liveVideoTracks.length > 0 ? stream : null;
+  const liveVideoTracksForStream = (stream: MediaStream | null | undefined): MediaStreamTrack[] => {
+    if (!stream) return [];
+    return stream.getVideoTracks().filter((track) => track.readyState === 'live');
+  };
+  const hasLiveVideoTrack = (stream: MediaStream | null | undefined): stream is MediaStream =>
+    liveVideoTracksForStream(stream).length > 0;
+  const resolveActiveCameraStream = (): MediaStream | null => {
+    const cameraStream = camera.stream;
+    if (hasLiveVideoTrack(cameraStream)) return cameraStream;
+    const activeVideoStream = videoRef.current?.srcObject;
+    if (activeVideoStream instanceof MediaStream && hasLiveVideoTrack(activeVideoStream)) return activeVideoStream;
+    return null;
+  };
+  const getUsableCameraStream = resolveActiveCameraStream;
+  const failCameraStreamNotReady = (source: string) => {
+    const videoSrcObject = videoRef.current?.srcObject;
+    const hasVideoSrcObject = videoSrcObject instanceof MediaStream;
+    const liveVideoTrackCount = hasVideoSrcObject ? liveVideoTracksForStream(videoSrcObject).length : 0;
+    markBroadcastDebug({
+      cameraStatus: camera.status,
+      hasCameraStreamRef: hasLiveVideoTrack(camera.stream),
+      hasVideoSrcObject,
+      liveVideoTrackCount,
+      selectedDeviceId: camera.selectedDeviceId,
+      sessionId: activeBroadcastSessionRef.current?.session_id || session?.session_id || null,
+      peerStatus,
+      cameraStreamResolved: false,
+      broadcastStatus: 'camera_stream_not_ready',
+      lastFailureReason: 'camera_stream_not_ready',
+      lastBroadcastError: 'camera_stream_not_ready',
+      cameraStreamNotReadySource: source,
+    });
+    appendTrace('broadcast:camera-stream-not-ready');
+    setPeerStatus('failed');
+    setBroadcast((prev) => ({
+      ...prev,
+      stage: 'failed',
+      waitingForAnswer: false,
+      error: makeBroadcastFailure('missing_media_stream', 'camera_stream_not_ready'),
+      updatedAt: Date.now(),
+    }));
+    if (camera.status === 'ready' || camera.status === 'previewing') {
+      stopCamera();
+    }
+    return null;
+  };
+  const ensureCameraStreamReady = async (): Promise<MediaStream | null> => {
+    const existing = resolveActiveCameraStream();
+    if (existing) return existing;
+    const enabled = await handleEnableCamera();
+    if (!enabled) return failCameraStreamNotReady('enable-camera-failed');
+    return resolveActiveCameraStream() || failCameraStreamNotReady('stream-missing-after-enable');
   };
   const bindPreviewStream = async (stream: MediaStream): Promise<void> => {
     if (!videoRef.current) return;
@@ -259,7 +306,10 @@ export default function ConnectDevicePage() {
       return true;
     }
     const stream = await startCamera({ deviceId: camera.selectedDeviceId, audio: true });
-    if (!stream) return false;
+    if (!hasLiveVideoTrack(stream)) {
+      failCameraStreamNotReady('start-camera-returned-no-live-video');
+      return false;
+    }
     await bindPreviewStream(stream);
     traceDevice('camera:enable:ready', { videoTracks: stream.getVideoTracks().length, audioTracks: stream.getAudioTracks().length });
     return true;
@@ -396,13 +446,9 @@ export default function ConnectDevicePage() {
     });
     appendTrace('broadcast:begin');
     markLiveFlowStep({ deviceBroadcastRequestedAt: Date.now() });
-    const existingStream = getUsableCameraStream();
-    let stream = existingStream;
-    if (!stream) {
-      const enabled = await handleEnableCamera();
-      if (!enabled) return false;
-      stream = getUsableCameraStream();
-    }
+    const existingStream = resolveActiveCameraStream();
+    const stream = await ensureCameraStreamReady();
+    if (!stream) return false;
     traceDevice('broadcast:stream-source', {
       source: existingStream ? 'existing-camera-session' : 'new-camera-session',
       videoTracks: stream?.getVideoTracks().length ?? 0,
@@ -416,16 +462,22 @@ export default function ConnectDevicePage() {
         enabled: track.enabled,
       })) ?? [],
     });
-    if (!stream) {
-      markBroadcastDebug({ cameraReady: false, hasStream: false, lastBroadcastError: 'camera_stream_not_ready' });
-      throw new Error('camera_stream_not_ready');
-    }
     markBroadcastDebug({
       nodeId,
       cameraReady: true,
       hasStream: true,
       videoTrackCount: stream.getVideoTracks().length,
       audioTrackCount: stream.getAudioTracks().length,
+      cameraStatus: camera.status,
+      hasCameraStreamRef: hasLiveVideoTrack(camera.stream),
+      hasVideoSrcObject: videoRef.current?.srcObject instanceof MediaStream,
+      liveVideoTrackCount: liveVideoTracksForStream(stream).length,
+      selectedDeviceId: camera.selectedDeviceId,
+      sessionId: activeBroadcastSessionRef.current?.session_id || session?.session_id || null,
+      peerStatus,
+      cameraStreamResolved: true,
+      broadcastStatus: 'camera_ready',
+      lastFailureReason: null,
     });
     markLiveFlowStep({ deviceCameraReadyAt: Date.now() });
     setBroadcast((prev) => ({ ...prev, stage: 'camera_ready', updatedAt: Date.now() }));
@@ -434,8 +486,20 @@ export default function ConnectDevicePage() {
     const nextSession = await startPreview('camera', { stream, deviceId: camera.selectedDeviceId ?? undefined });
     if (!nextSession) {
       setBroadcast((prev) => ({ ...prev, stage: 'failed', error: makeBroadcastFailure('live_session_failed'), updatedAt: Date.now() }));
+      markBroadcastDebug({
+        startLiveSessionStatus: 'no_session_returned',
+        startLiveSessionSessionId: null,
+        broadcastStatus: 'live_session_failed',
+        lastFailureReason: 'live_session_failed',
+      });
       return false;
     }
+    markBroadcastDebug({
+      startLiveSessionStatus: 'ok',
+      startLiveSessionSessionId: nextSession.session_id,
+      sessionId: nextSession.session_id,
+      broadcastStatus: 'live_session_started',
+    });
     setActiveBroadcastSession(nextSession);
     activeBroadcastSessionRef.current = nextSession;
     setActiveRuntimeSession(nextSession.session_id, nextSession.node_id);
@@ -593,7 +657,7 @@ export default function ConnectDevicePage() {
         claimId={session?.claim_id ?? lastClaimId ?? null}
         chunkCount={session?.chunk_count ?? 0}
         sourceKind={session?.source_kind ?? null}
-        error={error}
+        error={error || broadcast.error?.cause || broadcast.error?.message || null}
         peerStatus={peerStatus}
         mode={mode}
         onModeChange={setMode}

@@ -211,10 +211,11 @@ export default function FullscreenDevicePreview({
   })();
 
   const hasLiveVideoStream = () => {
+    if (typeof MediaStream === 'undefined') return false;
     const stream = videoRef.current?.srcObject;
     return stream instanceof MediaStream && stream.getVideoTracks().some((track) => track.readyState === 'live');
   };
-  const hasCameraReady = !!cameraState?.stream || hasLiveVideoStream();
+  const hasCameraReady = (typeof MediaStream !== 'undefined' && cameraState?.stream instanceof MediaStream && cameraState.stream.getVideoTracks().some((track) => track.readyState === 'live')) || hasLiveVideoStream();
   const cameraStatus = cameraState?.status || 'idle';
   useEffect(() => {
     setControlsOpen((current) => {
