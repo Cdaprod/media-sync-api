@@ -363,7 +363,10 @@ export default function ConnectDevicePage() {
     appendTrace('peer:api-live-confirmed');
     setBroadcast((prev) => ({ ...prev, stage: 'waiting_for_answer', waitingForAnswer: true, updatedAt: Date.now() }));
     if (signalPollTimerRef.current != null) window.clearInterval(signalPollTimerRef.current);
+    let signalPollBusy = false;
     signalPollTimerRef.current = window.setInterval(() => {
+      if (signalPollBusy) return;
+      signalPollBusy = true;
       void api.getLiveSignalState(sessionId).then(async (signal) => {
         const activePeer = peerConnectionRef.current;
         if (!activePeer) return;
@@ -379,7 +382,7 @@ export default function ConnectDevicePage() {
           viewerIceSeenRef.current.add(key);
           await activePeer.addIceCandidate(candidate);
         }
-      }).catch(() => undefined);
+      }).catch(() => undefined).finally(() => { signalPollBusy = false; });
     }, 1000);
   };
 

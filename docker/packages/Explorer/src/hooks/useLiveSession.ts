@@ -260,6 +260,8 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     return () => cleanup();
   }, [cleanup]);
 
+  const apiRef = useRef(api);
+  apiRef.current = api;
   const startRecordingRef = useRef(startRecording);
   startRecordingRef.current = startRecording;
   const stopRecordingRef = useRef(stopRecording);
@@ -273,14 +275,14 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     const interval = window.setInterval(() => {
       if (controlPollBusyRef.current) return;
       controlPollBusyRef.current = true;
-      void api.getLiveSession(sessionId)
+      void apiRef.current.getLiveSession(sessionId)
         .then((latest) => {
           setSession(latest);
           const currentState = stateRef.current;
           if (latest.desired_action === 'start_recording' && currentState !== 'recording' && currentState !== 'ending') {
             void startRecordingRef.current().then((started) => {
               if (!started) return;
-              return api.acknowledgeLiveSessionControl(latest.session_id, 'start_recording')
+              return apiRef.current.acknowledgeLiveSessionControl(latest.session_id, 'start_recording')
                 .then(setSession)
                 .catch(() => undefined);
             });
@@ -288,7 +290,7 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
           if (latest.desired_action === 'stop_recording' && currentState === 'recording') {
             void stopRecordingRef.current().then((stopped) => {
               if (!stopped) return;
-              return api.acknowledgeLiveSessionControl(latest.session_id, 'stop_recording')
+              return apiRef.current.acknowledgeLiveSessionControl(latest.session_id, 'stop_recording')
                 .then(setSession)
                 .catch(() => undefined);
             });
@@ -300,7 +302,7 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
         });
     }, 1000);
     return () => window.clearInterval(interval);
-  }, [api, session?.session_id]);
+  }, [session?.session_id]);
 
   return {
     state,

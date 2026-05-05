@@ -17,7 +17,7 @@ def test_runtime_event_bus_publish_and_subscribe_replay(client):
     assert event["type"] == "node.updated"
     assert event["id"] >= 1
     assert event["payload"]["node_id"] == "n1"
-    assert "created_at" in event
+    assert "ts" in event
 
 
 def test_runtime_events_endpoint_sse_format(client):

@@ -111,8 +111,6 @@ export function LiveSourceCard({
       if (!event.candidate) return;
       void api.publishLiveSignalIce(session.session_id, 'viewer', viewerId, event.candidate.toJSON(), session.node_id).catch(() => undefined);
     };
-    peer.addTransceiver('video', { direction: 'recvonly' });
-    peer.addTransceiver('audio', { direction: 'recvonly' });
 
     const poll = window.setInterval(() => {
       void api.getLiveSignalState(session.session_id, viewerId)
@@ -143,6 +141,7 @@ export function LiveSourceCard({
           }
         })
         .catch(() => {
+          if (disposed) return;
           consecutiveFails++;
           if (consecutiveFails >= 5) setPeerStatus('failed');
         });

@@ -328,7 +328,7 @@ test('connect device page and live-session hook guard media APIs for insecure iO
   assert.ok(hook.includes('if (sourceKind === \'screen\' && !hasGetDisplayMedia) {'));
   assert.ok(hook.includes('await mediaDevices.getUserMedia({ video: true, audio: true })'));
   assert.ok(!hook.includes('await navigator.mediaDevices.getUserMedia'));
-  assert.ok(hook.includes("api.acknowledgeLiveSessionControl(latest.session_id, 'stop_recording')"));
+  assert.ok(hook.includes("acknowledgeLiveSessionControl(latest.session_id, 'stop_recording')"));
 
   assert.ok(page.includes('const capability = useMemo(() => {'));
   assert.ok(page.includes('isSecureContext: window.isSecureContext,'));
