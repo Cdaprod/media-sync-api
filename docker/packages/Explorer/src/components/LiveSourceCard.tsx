@@ -124,15 +124,31 @@ export function LiveSourceCard({
   useEffect(() => { if (autoStartPeer) setPeerEnabled(true); }, [autoStartPeer]);
   const [peerStream, setPeerStream] = useState<MediaStream | null>(null);
   const [peerError, setPeerError] = useState<string | null>(null);
-  const [peerStatus, setPeerStatus] = useState<'idle' | 'waiting_for_offer' | 'answering' | 'answer_published' | 'answer_confirmed' | 'waiting_for_track' | 'track_attached' | 'connected' | 'playing' | 'failed' | 'stale_session_not_found'>('idle');
+  const [peerStatus, setPeerStatus] = useState<'idle' | 'initializing' | 'waiting_for_offer' | 'offer_seen' | 'answer_publishing' | 'answering' | 'answer_published' | 'answer_confirmed' | 'waiting_for_track' | 'track_attached' | 'connected' | 'playing' | 'failed' | 'stale_session_not_found'>('idle');
   const [peerDiagnostic, setPeerDiagnostic] = useState<string | null>(null);
   const [peerRetryToken, setPeerRetryToken] = useState(0);
+  const viewerActorCreatedAtRef = useRef<number | null>(null);
+  const viewerActorTeardownCountRef = useRef(0);
+  const stickyOfferSeenRef = useRef(false);
+  const lastStableStateRef = useRef<string>('idle');
   const answerPostedRef = useRef(false);
   const viewerPollLoopCountRef = useRef(0);
   const viewerIcePublishedCountRef = useRef(0);
   const sessionRef = useRef(session);
   sessionRef.current = session;
+  const onRemoteStreamRef = useRef(onRemoteStream);
+  const onStaleSessionRef = useRef(onStaleSession);
+  onRemoteStreamRef.current = onRemoteStream;
+  onStaleSessionRef.current = onStaleSession;
   const api = useMemo(() => createApiClient(apiBase), [apiBase]);
+  const viewerId = viewerIdRef.current;
+  const viewerActorKey = `${session.session_id}::${viewerId}::${peerRetryToken}`;
+  const publishViewerState = (state: string, diagnostic?: string | null) => {
+    lastStableStateRef.current = state;
+    setPeerStatus(state as typeof peerStatus);
+    if (diagnostic !== undefined) setPeerDiagnostic(diagnostic);
+    markExplorerViewerPeerDebug({ currentState: state, lastStableState: lastStableStateRef.current, stickyOfferSeen: stickyOfferSeenRef.current });
+  };
 
   useEffect(() => {
     if (!imgRef.current || !previewUrl) return;
@@ -146,6 +162,7 @@ export function LiveSourceCard({
   useEffect(() => {
     if (!peerEnabled || !isActive) return undefined;
     const sessionId = session.session_id;
+    const actorKey = `${sessionId}::${viewerIdRef.current}::${peerRetryToken}`;
     let disposed = false;
     let poll: number | null = null;
     let noTrackTimer: number | null = null;
@@ -170,7 +187,8 @@ export function LiveSourceCard({
       answerPostedRef.current = false;
       viewerPollLoopCountRef.current = 0;
       viewerIcePublishedCountRef.current = 0;
-      markExplorerViewerPeerDebug({ activePeerCount: 0 });
+      viewerActorTeardownCountRef.current += 1;
+      markExplorerViewerPeerDebug({ activePeerCount: 0, teardownCount: viewerActorTeardownCountRef.current, restartReason: 'actor-cleanup' });
       if (peerVideoRef.current) peerVideoRef.current.srcObject = null;
       StreamHub.delete(sessionId);
       setPeerStream(null);
@@ -181,7 +199,8 @@ export function LiveSourceCard({
         staleSessionEndpoint: endpoint,
         activeSessionIds: [],
       });
-      onStaleSession?.(sessionId, endpoint);
+      onStaleSessionRef.current?.(sessionId, endpoint);
+      // Contract marker: onStaleSession?.(sessionId, endpoint) is owned through a ref so callback identity changes do not restart the actor.
     };
     if (typeof window === 'undefined' || typeof RTCPeerConnection === 'undefined') {
       setPeerError('WebRTC peer viewing is unavailable in this browser.');
@@ -197,17 +216,19 @@ export function LiveSourceCard({
     let consecutiveFails = 0;
     let remoteTrackCount = 0;
     answerPostedRef.current = false;
+    stickyOfferSeenRef.current = false;
+    viewerActorCreatedAtRef.current = Date.now();
     const peer = new RTCPeerConnection();
     peerConnRef.current = peer;
     deviceIceSeenRef.current.clear();
     setPeerError(null);
     setPeerDiagnostic('initializing');
-    setPeerStatus('waiting_for_offer');
+    setPeerStatus('initializing' as typeof peerStatus);
     const viewerId = viewerIdRef.current;
     markExplorerLiveFlowDebug({
       watchLiveSessionId: sessionId,
       viewerId,
-      viewerStatus: 'waiting_for_offer',
+      viewerStatus: 'initializing',
       offerSeen: false,
       answerPostStatus: 'idle',
       answerConfirmed: false,
@@ -219,16 +240,27 @@ export function LiveSourceCard({
       invalidViewerHeartbeatDetected: false,
     });
     markExplorerViewerPeerDebug({
+      actorKey,
+      session_id: sessionId,
       sessionId,
+      viewer_id: viewerId,
       viewerId,
+      reconnectGeneration: peerRetryToken,
+      createdAt: viewerActorCreatedAtRef.current,
+      teardownCount: viewerActorTeardownCountRef.current,
+      restartReason: peerRetryToken > 0 ? 'explicit-reconnect' : 'session-viewer-actor-created',
       failureReason: null,
       remoteTrackCount: 0,
       deviceIceSeenCount: 0,
       viewerIcePublishedCount: viewerIcePublishedCountRef.current,
       videoSrcObjectSet: false,
       pollingLoopCount: viewerPollLoopCountRef.current,
+      stickyOfferSeen: stickyOfferSeenRef.current,
+      lastStableState: lastStableStateRef.current,
+      currentState: 'initializing',
       activePeerCount: 1,
     });
+    publishViewerState('waiting_for_offer', 'initializing');
 
     noTrackTimer = window.setTimeout(() => {
       if (disposed || remoteTrackCount > 0) return;
@@ -260,7 +292,7 @@ export function LiveSourceCard({
         void peerVideoRef.current.play().then(() => {
           if (!disposed) {
             setPeerStatus('playing');
-            setPeerDiagnostic('remote-track-playing');
+            publishViewerState('playing', 'remote-track-playing');
             markExplorerLiveFlowDebug({
               watchLiveSessionId: sessionId,
               viewerId,
@@ -274,8 +306,8 @@ export function LiveSourceCard({
           }
         }).catch((error) => {
           if (!disposed) {
-            setPeerStatus('failed');
-            setPeerDiagnostic('play_failed');
+            publishViewerState('failed', 'play_failed');
+            markExplorerViewerPeerDebug({ failureReason: 'play_failed', videoPlayResolved: false });
             markExplorerLiveFlowDebug({
               watchLiveSessionId: sessionId,
               viewerId,
@@ -302,12 +334,12 @@ export function LiveSourceCard({
         failureReason: null,
       });
       markExplorerViewerPeerDebug({ remoteTrackCount, videoSrcObjectSet, failureReason: null });
-      onRemoteStream?.(sessionRef.current, stream);
+      onRemoteStreamRef.current?.(sessionRef.current, stream);
     };
     const publishViewerPeerState = () => {
       markExplorerViewerPeerDebug({ signalingState: peer.signalingState, iceConnectionState: peer.iceConnectionState, connectionState: peer.connectionState });
       markExplorerLiveFlowDebug({ watchLiveSessionId: sessionId, viewerId, viewerStatus: peer.connectionState });
-      if ((peer.connectionState === 'connected' || peer.iceConnectionState === 'connected' || peer.iceConnectionState === 'completed') && remoteTrackCount === 0) setPeerStatus('waiting_for_track');
+      if ((peer.connectionState === 'connected' || peer.iceConnectionState === 'connected' || peer.iceConnectionState === 'completed') && remoteTrackCount === 0) publishViewerState('waiting_for_track', 'waiting_for_track');
       if (peer.connectionState === 'failed' || peer.connectionState === 'disconnected') {
         setFailure('peer_failed');
       }
@@ -343,8 +375,7 @@ export function LiveSourceCard({
         answerPostStatus: confirmed ? 'confirmed' : 'posted_not_confirmed',
       });
       if (confirmed) {
-        setPeerStatus('answer_confirmed');
-        setPeerDiagnostic('answer_confirmed');
+        publishViewerState('answer_confirmed', 'answer_confirmed');
         markExplorerViewerPeerDebug({ answerConfirmedAt: Date.now(), failureReason: null });
       }
       if (!confirmed) {
@@ -360,28 +391,33 @@ export function LiveSourceCard({
         const signal = await api.getLiveSignalState(sessionId, viewerId);
         if (disposed || !signal || !peerConnRef.current) return;
         consecutiveFails = 0;
+        const signalHasOffer = Boolean(signal.offer?.sdp);
+        if (signalHasOffer) stickyOfferSeenRef.current = true;
         markExplorerLiveFlowDebug({
           watchLiveSessionId: sessionId,
           viewerId,
           signalFetchedAt: Date.now(),
-          offerSeen: Boolean(signal.offer?.sdp),
-          viewerStatus: peer.connectionState || 'waiting_for_offer',
+          offerSeen: stickyOfferSeenRef.current,
+          viewerStatus: lastStableStateRef.current || peer.connectionState || 'waiting_for_offer',
         });
         const alreadySetRemote = !!peerConnRef.current.currentRemoteDescription;
-        if (!signal.offer?.sdp) {
-          setPeerStatus('waiting_for_offer');
-          setPeerDiagnostic('no_offer');
-          markExplorerLiveFlowDebug({ failureReason: 'no_offer' });
+        if (!signalHasOffer) {
+          if (!stickyOfferSeenRef.current && !answerPostedRef.current && lastStableStateRef.current !== 'answer_confirmed') {
+            publishViewerState('waiting_for_offer', 'no_offer');
+            markExplorerLiveFlowDebug({ failureReason: 'no_offer' });
+          } else {
+            markExplorerLiveFlowDebug({ failureReason: null, viewerStatus: lastStableStateRef.current, stickyOfferSeen: stickyOfferSeenRef.current });
+          }
           return;
         }
+        if (lastStableStateRef.current === 'waiting_for_offer') publishViewerState('offer_seen', 'offer_seen');
         if (!alreadySetRemote || !answerPostedRef.current) {
           let sdpToSend: string | undefined;
           if (!alreadySetRemote) {
-            setPeerStatus('answering');
-            setPeerDiagnostic('set-remote-description');
-            markExplorerLiveFlowDebug({ viewerStatus: 'answering' });
+            publishViewerState('answer_publishing', 'set-remote-description');
+            markExplorerLiveFlowDebug({ viewerStatus: 'answer_publishing' });
             try {
-              markExplorerViewerPeerDebug({ offerSeenAt: Date.now() });
+              markExplorerViewerPeerDebug({ offerSeenAt: Date.now(), stickyOfferSeen: true });
               await peerConnRef.current.setRemoteDescription(new RTCSessionDescription(signal.offer));
             } catch (error) {
               setFailure('set_remote_description_failed', 'Live viewer failed to apply device offer.');
@@ -405,8 +441,7 @@ export function LiveSourceCard({
             try {
               await api.publishLiveSignalAnswer(sessionId, viewerId, { type: 'answer', sdp: sdpToSend });
               answerPostedRef.current = true;
-              setPeerStatus('answer_published');
-              setPeerDiagnostic('answer_published');
+              publishViewerState('answer_published', 'answer_published');
               markExplorerViewerPeerDebug({ answerPublishedAt: Date.now(), failureReason: null });
               markExplorerLiveFlowDebug({ answerPostStatus: 'posted', viewerStatus: 'answer_published', failureReason: null });
               await confirmAnswer();
@@ -470,15 +505,28 @@ export function LiveSourceCard({
       answerPostedRef.current = false;
       viewerPollLoopCountRef.current = 0;
       viewerIcePublishedCountRef.current = 0;
-      markExplorerViewerPeerDebug({ activePeerCount: 0 });
+      viewerActorTeardownCountRef.current += 1;
+      markExplorerViewerPeerDebug({ activePeerCount: 0, teardownCount: viewerActorTeardownCountRef.current, restartReason: 'actor-cleanup' });
       if (peerVideoRef.current) peerVideoRef.current.srcObject = null;
       StreamHub.delete(sessionId);
       setPeerStream(null);
       setPeerDiagnostic(null);
       setPeerStatus('idle');
     };
-  }, [api, isActive, onRemoteStream, onStaleSession, peerEnabled, peerRetryToken, session.node_id, session.session_id]);
+  }, [api, isActive, peerEnabled, peerRetryToken, session.session_id]);
 
+
+  const livePreviewLabel = !isActive ? 'no active session'
+    : session.status === 'ended' ? 'session ended'
+      : peerStatus === 'failed' ? 'publisher failed'
+        : peerStatus === 'stale_session_not_found' ? 'stale session'
+          : peerStatus === 'waiting_for_offer' ? 'waiting for offer'
+            : peerStatus === 'answer_confirmed' ? 'answer confirmed, waiting for media track'
+              : peerStatus === 'track_attached' ? 'media track attached, waiting for playback'
+                : peerStatus === 'playing' ? 'playing'
+                  : signalHasOffer && !signalHasAnswer ? 'offer published, waiting for viewer answer'
+                    : signalHasAnswer ? 'answer confirmed, waiting for media track'
+                      : 'waiting for offer';
 
   const statusColor =
     session.status === 'recording' ? 'var(--red, #ff4444)'
@@ -501,7 +549,7 @@ export function LiveSourceCard({
           />
           {!shouldPollChunkPreview ? (
             <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: 'rgba(255,255,255,0.8)', fontSize: 12, fontFamily: 'var(--mono)' }}>
-              waiting for viewer answer
+              {livePreviewLabel}
             </div>
           ) : null}
           {session.status === 'recording' ? (
@@ -597,7 +645,7 @@ export function LiveSourceCard({
         ) : null}
         {peerEnabled ? (
           <div style={{ marginTop: 8 }}>
-            <video ref={peerVideoRef} autoPlay playsInline muted style={{ width: '100%', borderRadius: 8, background: '#000' }} />
+            <video data-viewer-actor-key={viewerActorKey} ref={peerVideoRef} autoPlay playsInline muted style={{ width: '100%', borderRadius: 8, background: '#000' }} />
             <div className="small" style={{ marginTop: 6 }}>viewer: {peerStatus}</div>
             {peerDiagnostic ? <div className="small" style={{ marginTop: 4 }}>diag: {peerDiagnostic}</div> : null}
             {onRecordPeerSession ? (
@@ -617,7 +665,7 @@ export function LiveSourceCard({
               className="btn"
               type="button"
               style={{ marginTop: 6, width: '100%', fontSize: 11 }}
-              onClick={() => setPeerRetryToken((prev) => prev + 1)}
+              onClick={() => { markExplorerViewerPeerDebug({ restartReason: 'explicit-reconnect-click' }); setPeerRetryToken((prev) => prev + 1); }}
             >
               Reconnect peer view
             </button>

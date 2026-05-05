@@ -18,6 +18,11 @@ export function RuntimeDetailsModal({
   onClose,
 }: RuntimeDetailsModalProps) {
   const json = useMemo(() => JSON.stringify(payload, null, 2), [payload]);
+  const runtimeActivitySessionIds = useMemo(() => (
+    Array.from(new Set(runtimeActivity
+      .map((entry) => (entry && typeof entry === 'object' ? String((entry as Record<string, unknown>).session_id || '').trim() : ''))
+      .filter(Boolean)))
+  ), [runtimeActivity]);
 
   if (!isOpen) return null;
 
@@ -74,6 +79,9 @@ export function RuntimeDetailsModal({
         {runtimeActivity.length > 0 ? (
           <section style={{ marginTop: 14 }}>
             <h4 className="confirm-title" style={{ fontSize: 14 }}>Runtime activity</h4>
+            {runtimeActivitySessionIds.length > 0 ? (
+              <div className="small" style={{ marginTop: 4 }}>runtimeActivitySessionIds: {runtimeActivitySessionIds.join(', ')}</div>
+            ) : null}
             <pre
               style={{
                 marginTop: 8,

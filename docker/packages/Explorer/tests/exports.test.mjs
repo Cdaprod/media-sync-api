@@ -4113,3 +4113,66 @@ test('explorer and device pages register stable tab roles on mount and focus', (
   assert.ok(device.includes('subscribeBrowserRuntimeChannel'), 'Device must subscribe to BroadcastChannel for open-request');
   assert.ok(device.includes("message.type === 'open-request'"), 'Device must handle open-request messages');
 });
+
+
+test('live session canonical selector rejects runtime overlays and preserves offered authority', () => {
+  const contractPath = path.join(packageRoot, 'src', 'contracts', 'liveSessions.ts');
+  const content = fs.readFileSync(contractPath, 'utf8');
+  assert.ok(content.includes('export function selectPrimaryLiveSessionForNodeSource'));
+  assert.ok(content.includes('export function selectPrimaryLiveSessionsByNodeSource'));
+  assert.ok(content.includes("rejectedSessionIds.push({ sessionId, reason: 'runtime-event' })"));
+  assert.ok(content.includes("'active-with-offer-and-answer'"));
+  assert.ok(content.includes("'active-with-offer'"));
+  assert.ok(content.includes("'active-no-offer'"));
+  assert.ok(content.includes("'newest-non-ended'"));
+  assert.ok(content.includes('isSessionSuperseded(session)'));
+  assert.ok(content.includes('hasWebRtcSessionShape'));
+  assert.ok(content.includes("typeof record.has_offer === 'boolean'"));
+  assert.ok(content.includes('FAILED_LIVE_SESSION_STATES'));
+  assert.ok(content.includes('candidates.sort'));
+});
+
+test('live panels and device instances share canonical session selection', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const deviceInstancesPath = path.join(packageRoot, 'src', 'source-control', 'buildLiveDeviceInstances.ts');
+  const webRtcHookPath = path.join(packageRoot, 'src', 'hooks', 'useWebRtcLiveSessions.ts');
+  const liveHookPath = path.join(packageRoot, 'src', 'hooks', 'useLiveSessions.ts');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const deviceInstances = fs.readFileSync(deviceInstancesPath, 'utf8');
+  const webRtcHook = fs.readFileSync(webRtcHookPath, 'utf8');
+  const liveHook = fs.readFileSync(liveHookPath, 'utf8');
+  assert.ok(explorer.includes('selectPrimaryLiveSessionsByNodeSource<LiveSession>'));
+  assert.ok(explorer.includes('selectedPrimaryByNodeSource'));
+  assert.ok(explorer.includes('renderedPrimarySessionIds: renderedSessionIds'));
+  assert.ok(explorer.includes('viewerActorBySessionId'));
+  assert.ok(deviceInstances.includes('selectPrimaryLiveSessionsByNodeSource<WebRtcLiveSession>(liveSessions)'));
+  assert.ok(webRtcHook.includes('primarySelectionByNodeSource'));
+  assert.ok(liveHook.includes('primarySelectionByNodeSource'));
+});
+
+test('LiveSourceCard viewer actor is keyed and does not regress to waiting after answer confirmation', () => {
+  const cardPath = path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx');
+  const content = fs.readFileSync(cardPath, 'utf8');
+  assert.ok(content.includes('const viewerActorKey = `${session.session_id}::${viewerId}::${peerRetryToken}`'));
+  assert.ok(content.includes('data-viewer-actor-key={viewerActorKey}'));
+  assert.ok(content.includes('stickyOfferSeenRef'));
+  assert.ok(content.includes("lastStableStateRef.current !== 'answer_confirmed'"));
+  assert.ok(content.includes('onRemoteStreamRef.current?.'));
+  assert.ok(content.includes('onStaleSessionRef.current?.'));
+  assert.ok(content.includes("}, [api, isActive, peerEnabled, peerRetryToken, session.session_id])"));
+  assert.ok(content.includes("publishViewerState('answer_confirmed', 'answer_confirmed')"));
+  assert.ok(content.includes("'answer confirmed, waiting for media track'"));
+});
+
+test('device publisher peer is session-owned and republish is explicit', () => {
+  const devicePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const content = fs.readFileSync(devicePath, 'utf8');
+  assert.ok(content.includes('publisherActorKey'));
+  assert.ok(content.includes('publisherActorCreatedAtRef'));
+  assert.ok(content.includes("restartReason: 'republish-current-session'"));
+  assert.ok(content.includes('const existingPublisherSession = activeBroadcastSessionRef.current || activeBroadcastSession || session;'));
+  assert.ok(content.includes("'reused_current_session'"));
+  assert.ok(content.includes("'explicit-republish-required'"));
+  assert.ok(content.includes('offerPublished: true'));
+  assert.ok(content.includes('answerApplied: true'));
+});

@@ -388,3 +388,55 @@ def test_starting_second_live_session_supersedes_previous_active_same_node_sourc
     heartbeat = client.post(f"/api/live_sessions/{second_id}/heartbeat", headers=headers)
     assert heartbeat.status_code == 200
     assert heartbeat.json()["session_id"] == second_id
+
+
+def test_superseded_live_session_heartbeat_does_not_resurrect_old_active_candidate(client):
+    node_id, token = _register_node_auth(client, "runner-live-supersede-heartbeat")
+    headers = _auth_headers(node_id, token)
+
+    first = client.post(
+        "/api/live_sessions/start",
+        json={"node_id": node_id, "source_kind": "camera"},
+        headers=headers,
+    )
+    assert first.status_code == 200
+    first_id = first.json()["session_id"]
+
+    second = client.post(
+        "/api/live_sessions/start",
+        json={"node_id": node_id, "source_kind": "camera"},
+        headers=headers,
+    )
+    assert second.status_code == 200
+    second_id = second.json()["session_id"]
+
+    resurrect = client.post(f"/api/live_sessions/{first_id}/heartbeat", headers=headers)
+    assert resurrect.status_code == 404
+
+    listed = client.get("/api/live_sessions")
+    assert listed.status_code == 200
+    assert [entry["session_id"] for entry in listed.json()] == [second_id]
+
+
+def test_viewer_runtime_signal_events_do_not_become_durable_live_sessions(client):
+    session_id = "sess-runtime-event-not-durable"
+    client.post(
+        f"/api/live/{session_id}/offer",
+        json={"node_id": "node-runtime-event-not-durable", "offer": {"type": "offer", "sdp": "v=0\r\no=offer"}},
+    )
+    client.post(
+        f"/api/live/{session_id}/viewers/viewer-runtime/answer",
+        json={"answer": {"type": "answer", "sdp": "v=0\r\no=answer"}},
+    )
+    client.post(
+        f"/api/live/{session_id}/viewers/viewer-runtime/state",
+        json={"state": "answer_confirmed"},
+    )
+    client.post(
+        f"/api/live/{session_id}/viewers/viewer-runtime/ice",
+        json={"candidate": {"candidate": "candidate-viewer-runtime"}},
+    )
+
+    durable = client.get("/api/live_sessions")
+    assert durable.status_code == 200
+    assert all(entry["session_id"] != session_id for entry in durable.json())

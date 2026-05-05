@@ -114,6 +114,8 @@ class LiveSessionService:
 
     def heartbeat(self, session_id: str) -> LiveSession:
         session = self.session_registry.require(session_id)
+        if session.status == 'ended' or dict(session.metadata).get('superseded_by_session_id'):
+            raise ValueError(f"Live session '{session_id}' is not active")
         updated = LiveSession(
             session_id=session.session_id,
             node_id=session.node_id,

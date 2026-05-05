@@ -142,6 +142,8 @@ export default function ConnectDevicePage() {
   const signalPollTimerRef = useRef<number | null>(null);
   const publisherSignalPollLoopCountRef = useRef(0);
   const deviceIcePublishedCountRef = useRef(0);
+  const publisherActorCreatedAtRef = useRef<number | null>(null);
+  const publisherActorTeardownCountRef = useRef(0);
   const nodeHeartbeatTimerRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
   const publisherBusyRef = useRef(false);
   const activeBroadcastSessionRef = useRef<{ session_id: string } | null>(null);
@@ -187,7 +189,11 @@ export default function ConnectDevicePage() {
     const current = ((window as any).__connectDevicePublisherPeerDebug || {}) as Record<string, unknown>;
     (window as any).__connectDevicePublisherPeerDebug = {
       ...current,
+      publisherActorKey: peerSessionIdRef.current ? `${peerSessionIdRef.current}::publisher` : null,
+      session_id: peerSessionIdRef.current,
       sessionId: peerSessionIdRef.current,
+      createdAt: publisherActorCreatedAtRef.current,
+      teardownCount: publisherActorTeardownCountRef.current,
       nodeId,
       sourceKind: 'camera',
       pollingLoopCount: publisherSignalPollLoopCountRef.current,
@@ -405,15 +411,26 @@ export default function ConnectDevicePage() {
       return;
     }
     clearPublisherSignalPoll();
-    peerConnectionRef.current?.close();
+    if (peerConnectionRef.current && peerSessionIdRef.current !== sessionId) {
+      publisherActorTeardownCountRef.current += 1;
+      markPublisherPeerDebug({ restartReason: 'session_id_changed', teardownCount: publisherActorTeardownCountRef.current });
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    if (peerConnectionRef.current && peerSessionIdRef.current === sessionId) {
+      markPublisherPeerDebug({ restartReason: 'republish-current-session', offerPublished: true });
+      peerConnectionRef.current.close();
+      publisherActorTeardownCountRef.current += 1;
+    }
     const peerCreatedAt = Date.now();
+    publisherActorCreatedAtRef.current = peerCreatedAt;
     const peer = new RTCPeerConnection();
     peerConnectionRef.current = peer;
     peerSessionIdRef.current = sessionId;
     viewerIceSeenRef.current.clear();
     deviceIcePublishedCountRef.current = 0;
     activeViewerIdRef.current = 'viewer-broadcast';
-    markPublisherPeerDebug({ peerCreatedAt, connectionState: peer.connectionState, iceConnectionState: peer.iceConnectionState, iceGatheringState: peer.iceGatheringState, signalingState: peer.signalingState });
+    markPublisherPeerDebug({ peerCreatedAt, createdAt: peerCreatedAt, restartReason: 'session-owned-publisher-created', offerPublished: false, answerSeen: false, answerApplied: false, connectionState: peer.connectionState, iceConnectionState: peer.iceConnectionState, iceGatheringState: peer.iceGatheringState, signalingState: peer.signalingState });
     const publishStateDebug = () => {
       markPublisherPeerDebug({
         signalingState: peer.signalingState,
@@ -428,7 +445,7 @@ export default function ConnectDevicePage() {
         setBroadcast((prev) => ({ ...prev, stage: 'connected', waitingForAnswer: false, updatedAt: Date.now() }));
       }
       if (peer.connectionState === 'failed' || peer.iceConnectionState === 'failed') {
-        markPublisherPeerDebug({ failureReason: 'peer_failed' });
+        markPublisherPeerDebug({ failureReason: 'peer_failed', restartReason: 'explicit-republish-required' });
         setPeerStatus('failed');
       }
       if (peer.connectionState === 'disconnected' || peer.iceConnectionState === 'disconnected') {
@@ -457,7 +474,7 @@ export default function ConnectDevicePage() {
     try {
       await api.publishLiveSignalOffer(sessionId, { type: 'offer', sdp: offer.sdp || '' }, nodeId || undefined);
       markBroadcastDebug({ offerPosted: true, offerPostStatus: 'ok' });
-      markPublisherPeerDebug({ offerPublishedAt: Date.now() });
+      markPublisherPeerDebug({ offerPublishedAt: Date.now(), offerPublished: true, failureReason: null });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       markBroadcastDebug({ offerPosted: false, offerPostStatus: message, lastBroadcastError: message });
@@ -494,12 +511,12 @@ export default function ConnectDevicePage() {
         if (!activePeer || peerSessionIdRef.current !== sessionId) return;
         if (signal.primary_viewer_id) activeViewerIdRef.current = signal.primary_viewer_id;
         if (signal.answer?.sdp && !activePeer.currentRemoteDescription && !activePeer.remoteDescription) {
-          markPublisherPeerDebug({ answerSeenAt: Date.now() });
+          markPublisherPeerDebug({ answerSeenAt: Date.now(), answerSeen: true });
           await activePeer.setRemoteDescription(new RTCSessionDescription(signal.answer));
           appendTrace(`peer:answer-applied ${sessionId}`);
           setPeerStatus('answer_applied');
           setBroadcast((prev) => ({ ...prev, stage: 'waiting_for_answer', waitingForAnswer: false, updatedAt: Date.now() }));
-          markPublisherPeerDebug({ answerAppliedAt: Date.now(), signalingState: activePeer.signalingState });
+          markPublisherPeerDebug({ answerAppliedAt: Date.now(), answerApplied: true, signalingState: activePeer.signalingState });
         }
         for (const candidate of signal.ice_from_viewer || []) {
           const key = `${candidate.candidate}|${candidate.sdpMid || ''}|${candidate.sdpMLineIndex ?? ''}`;
@@ -564,7 +581,10 @@ export default function ConnectDevicePage() {
     setBroadcast((prev) => ({ ...prev, stage: 'camera_ready', updatedAt: Date.now() }));
     await bindPreviewStream(stream);
     appendTrace('live:startPreview');
-    const nextSession = await startPreview('camera', { stream, deviceId: camera.selectedDeviceId ?? undefined });
+    const existingPublisherSession = activeBroadcastSessionRef.current || activeBroadcastSession || session;
+    const nextSession = existingPublisherSession?.session_id
+      ? existingPublisherSession
+      : await startPreview('camera', { stream, deviceId: camera.selectedDeviceId ?? undefined });
     if (!nextSession) {
       setBroadcast((prev) => ({ ...prev, stage: 'failed', error: makeBroadcastFailure('live_session_failed'), updatedAt: Date.now() }));
       markBroadcastDebug({
@@ -576,16 +596,16 @@ export default function ConnectDevicePage() {
       return false;
     }
     markBroadcastDebug({
-      startLiveSessionStatus: 'ok',
+      startLiveSessionStatus: existingPublisherSession?.session_id ? 'reused_current_session' : 'ok',
       startLiveSessionSessionId: nextSession.session_id,
       sessionId: nextSession.session_id,
-      broadcastStatus: 'live_session_started',
+      broadcastStatus: existingPublisherSession?.session_id ? 'live_session_republish' : 'live_session_started',
     });
     setActiveBroadcastSession(nextSession);
     activeBroadcastSessionRef.current = nextSession;
     setActiveRuntimeSession(nextSession.session_id, nextSession.node_id);
     publishBrowserRuntimeSession(nextSession.session_id, nextSession.node_id);
-    appendTrace(`live:session-created ${nextSession.session_id}`);
+    appendTrace(`${existingPublisherSession?.session_id ? 'live:session-reused' : 'live:session-created'} ${nextSession.session_id}`);
     markLiveFlowStep({
       deviceBroadcastSessionId: nextSession.session_id,
       deviceBroadcastPublishedAt: Date.now(),

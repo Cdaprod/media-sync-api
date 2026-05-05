@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 
 import type { WebRtcLiveSession } from '../api';
-import { isLiveRuntimeEventPayload } from '../contracts/liveSessions';
+import { isLiveRuntimeEventPayload, selectPrimaryLiveSessionsByNodeSource } from '../contracts/liveSessions';
 
 type UseWebRtcLiveSessionsArgs = {
   listWebRtcLiveSessions: () => Promise<WebRtcLiveSession[]>;
@@ -110,23 +110,26 @@ export function useWebRtcLiveSessions({
     };
   }, [enabled, poll, reload]);
 
+  const primarySelectionByNodeSource = useMemo(() => selectPrimaryLiveSessionsByNodeSource<WebRtcLiveSession>(sessions), [sessions]);
+
   const sessionsByNodeId = useMemo(() => {
     const entries = new Map<string, WebRtcLiveSession>();
-    for (const session of sessions) {
-      if (session.node_id) entries.set(session.node_id, session);
+    for (const selection of primarySelectionByNodeSource.values()) {
+      if (selection.selectedSession?.node_id) entries.set(selection.selectedSession.node_id, selection.selectedSession);
     }
     return entries;
-  }, [sessions]);
+  }, [primarySelectionByNodeSource]);
 
   const waitingByNodeId = useMemo(() => {
     const entries = new Map<string, WebRtcLiveSession>();
-    for (const session of sessions) {
-      if (session.node_id && session.state === 'waiting_for_answer') {
+    for (const selection of primarySelectionByNodeSource.values()) {
+      const session = selection.selectedSession;
+      if (session?.node_id && session.state === 'waiting_for_answer') {
         entries.set(session.node_id, session);
       }
     }
     return entries;
-  }, [sessions]);
+  }, [primarySelectionByNodeSource]);
   const applyLiveSessionUpdate = useCallback((payload: Record<string, unknown>) => {
     if (isLiveRuntimeEventPayload(payload)) return;
     setSessions((prev) => {

@@ -57,6 +57,7 @@ import type { WebRtcLiveSession } from './contracts/live';
 import {
   isDurableLiveSessionRecord,
   isLiveRuntimeEventPayload,
+  selectPrimaryLiveSessionsByNodeSource,
   type LiveRuntimeEventPayload,
 } from './contracts/liveSessions';
 import { useRuntimeController } from './runtime/useRuntimeController';
@@ -153,37 +154,6 @@ function isWebRtcLivePreviewable(session: WebRtcLiveSession): boolean {
 
 function getLiveSessionSourceKind(session: LiveSession): string {
   return String((session as LiveSession & { sourceKind?: string }).source_kind || (session as LiveSession & { sourceKind?: string }).sourceKind || '').trim();
-}
-
-function liveSessionActivityRank(status: unknown): number {
-  switch (String(status || '').trim()) {
-    case 'recording': return 4;
-    case 'previewing': return 3;
-    case 'idle': return 2;
-    case 'ended': return 1;
-    default: return 0;
-  }
-}
-
-function liveSessionTimestamp(session: LiveSession): number {
-  const raw = session.last_heartbeat_at || session.started_at || '';
-  const parsed = Date.parse(raw);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function preferLiveSessionForNodeSource(
-  current: LiveSession | undefined,
-  next: LiveSession,
-  signalBySessionId: Map<string, WebRtcLiveSession>,
-): LiveSession {
-  if (!current) return next;
-  const currentRank = liveSessionActivityRank(current.status);
-  const nextRank = liveSessionActivityRank(next.status);
-  if (nextRank !== currentRank) return nextRank > currentRank ? next : current;
-  const currentHasAnswer = Boolean(signalBySessionId.get(current.session_id)?.has_answer);
-  const nextHasAnswer = Boolean(signalBySessionId.get(next.session_id)?.has_answer);
-  if (nextHasAnswer !== currentHasAnswer) return nextHasAnswer ? next : current;
-  return liveSessionTimestamp(next) >= liveSessionTimestamp(current) ? next : current;
 }
 
 type FocusMeasurementSnapshot = {
@@ -866,20 +836,22 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
     return Array.from(bySessionId.values());
   }, [liveSessions]);
+  const primaryLiveSelectionByNodeSource = useMemo(() => (
+    selectPrimaryLiveSessionsByNodeSource<LiveSession>(canonicalLiveSessions, livePanelSignalBySessionId)
+  ), [canonicalLiveSessions, livePanelSignalBySessionId]);
   const preferredSessionByNodeSource = useMemo(() => {
     const preferred = new Map<string, LiveSession>();
-    for (const session of canonicalLiveSessions) {
-      const sourceKind = getLiveSessionSourceKind(session);
-      if (!session.node_id || !sourceKind) continue;
-      const key = `${session.node_id}::${sourceKind}`;
-      preferred.set(key, preferLiveSessionForNodeSource(preferred.get(key), session, livePanelSignalBySessionId));
+    for (const [key, selection] of primaryLiveSelectionByNodeSource.entries()) {
+      if (selection.selectedSession) preferred.set(key, selection.selectedSession);
     }
     return preferred;
-  }, [canonicalLiveSessions, livePanelSignalBySessionId]);
+  }, [primaryLiveSelectionByNodeSource]);
   const livePanelSessions = useMemo<LiveSession[]>(() => (
-    Array.from(preferredSessionByNodeSource.values())
+    Array.from(primaryLiveSelectionByNodeSource.values())
+      .map((selection) => selection.selectedSession)
+      .filter((session): session is LiveSession => Boolean(session))
       .sort((a, b) => b.session_id.localeCompare(a.session_id))
-  ), [preferredSessionByNodeSource]);
+  ), [primaryLiveSelectionByNodeSource]);
   const runtimeEventSessionIds = useMemo(
     () => Object.keys(liveRuntimeEventsBySessionId).filter((sessionId) => liveRuntimeEventsBySessionId[sessionId]?.length),
     [liveRuntimeEventsBySessionId],
@@ -905,9 +877,16 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     const renderedSessionIds = livePanelSessions.map((session) => session.session_id);
     const duplicateRenderedSessionIds = renderedSessionIds.filter((sessionId, index) => renderedSessionIds.indexOf(sessionId) !== index);
     const canonicalSessionIds = canonicalLiveSessions.map((session) => session.session_id);
-    const preferredSessionByNodeSourceDebug = Object.fromEntries(
-      Array.from(preferredSessionByNodeSource.entries()).map(([key, session]) => [key, session.session_id]),
+    const selectedPrimaryByNodeSource = Object.fromEntries(
+      Array.from(primaryLiveSelectionByNodeSource.entries()).map(([key, selection]) => [key, selection.selectedSessionId]),
     );
+    const selectionReasons = Object.fromEntries(
+      Array.from(primaryLiveSelectionByNodeSource.entries()).map(([key, selection]) => [key, selection.selectionReason]),
+    );
+    const rejectedSessionIds = Object.fromEntries(
+      Array.from(primaryLiveSelectionByNodeSource.entries()).map(([key, selection]) => [key, selection.rejectedSessionIds]),
+    );
+    const preferredSessionByNodeSourceDebug = selectedPrimaryByNodeSource;
     (window as any).__explorerLivePanelDebug = {
       liveSessionCount: livePanelSessions.length,
       renderedSessionIds,
@@ -923,16 +902,21 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     (window as any).__explorerLiveMergeDebug = {
       canonicalSessionIds,
       renderedSessionIds,
+      renderedPrimarySessionIds: renderedSessionIds,
       runtimeEventSessionIds,
       rejectedRuntimeEventAsSessionIds,
+      rejectedSessionIds,
+      selectionReasons,
+      selectedPrimaryByNodeSource,
       duplicateRenderedSessionIds,
       selectedSessionId,
       selectedSessionIsCanonical: selectedSessionId ? canonicalSessionIds.includes(selectedSessionId) : false,
       runtimeEventsBySessionId: liveRuntimeEventsBySessionId,
       preferredSessionByNodeSource: preferredSessionByNodeSourceDebug,
+      viewerActorBySessionId: (window as any).__explorerViewerPeerDebug || {},
       viewerStateBySessionViewer,
     };
-  }, [canonicalLiveSessions, livePanelSessions, liveRuntimeEventsBySessionId, peerEnabledSessions, preferredSessionByNodeSource, rejectedRuntimeEventAsSessionIds, runtimeEventSessionIds, viewerStateBySessionViewer, webRtcLiveSessions]);
+  }, [canonicalLiveSessions, livePanelSessions, liveRuntimeEventsBySessionId, peerEnabledSessions, preferredSessionByNodeSource, primaryLiveSelectionByNodeSource, rejectedRuntimeEventAsSessionIds, runtimeEventSessionIds, viewerStateBySessionViewer, webRtcLiveSessions]);
 
 
   const reloadRuntimeLiveSessions = useCallback(async () => {

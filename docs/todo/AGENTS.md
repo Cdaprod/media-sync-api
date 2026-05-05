@@ -1,3 +1,11 @@
+## 2026-05-05 — Canonical live-session authority + peer actor stability patch (new)
+- [x] Added centralized `selectPrimaryLiveSessionForNodeSource` / `selectPrimaryLiveSessionsByNodeSource` contracts that reject runtime viewer events, ended/failed/superseded/stale sessions, and preserve older offered sessions over newer no-offer shells.
+- [x] Routed Explorer live panel, live merge diagnostics, WebRTC/live hooks, and Live Device Instances through the canonical selector so node_id/source_kind surfaces share the same selected session id.
+- [x] Stabilized `LiveSourceCard` viewer actors around `session_id::viewer_id::reconnectGeneration`, sticky offer-seen state, callback refs, and non-regressing answer-confirmed labels/debug.
+- [x] Stabilized Connect Device publisher debug/republish behavior around a session-owned publisher actor and reused the current active session for explicit republish instead of silently creating a replacement no-offer shell.
+- [x] Hardened backend live-session heartbeat so superseded/ended sessions cannot be resurrected as active candidates.
+- [ ] Validate on real iPhone that one node_id/source_kind keeps exactly one primary LIVE card through answer_confirmed -> track_attached -> playing and that Republish does not create a blank no-offer replacement card.
+
 ## 2026-05-05 — Stabilize live WebRTC publisher/viewer peer lifecycle (new)
 - [x] Hardened Connect Device publisher peer ownership so one session-owned RTCPeerConnection publishes offer, polls `/signal`, applies viewer answers, consumes viewer ICE once, and only marks connected from peer/ICE connection state.
 - [x] Added `window.__connectDevicePublisherPeerDebug` with stream, track, offer, answer, ICE, state, polling-loop, active-peer, and failure diagnostics.

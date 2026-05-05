@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { isDurableLiveSessionRecord } from '../contracts/liveSessions';
+import { isDurableLiveSessionRecord, selectPrimaryLiveSessionsByNodeSource } from '../contracts/liveSessions';
 import type { LiveSessionRecord } from '../types/liveSession';
 
 interface UseLiveSessionsOptions {
@@ -60,5 +60,7 @@ export function useLiveSessions({ listLiveSessions, enabled = false }: UseLiveSe
     setSessions((prev) => prev.filter((entry) => readRuntimeId(entry as unknown as IdRecord) !== id));
   }, []);
 
-  return { sessions, loading, error, reload, setSessions, applyLiveSessionUpdate, removeLiveSession };
+  const primarySelectionByNodeSource = useMemo(() => selectPrimaryLiveSessionsByNodeSource<LiveSessionRecord>(sessions), [sessions]);
+
+  return { sessions, primarySelectionByNodeSource, loading, error, reload, setSessions, applyLiveSessionUpdate, removeLiveSession };
 }
