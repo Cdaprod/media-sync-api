@@ -508,6 +508,68 @@ test('explorer live sessions panel renders durable and webrtc sessions independe
   assert.ok(card.includes("webRtcPreviewAvailable ? 'yes' : 'pending'"));
 });
 
+test('live WebRTC peer actors own publisher/viewer media-plane transitions', () => {
+  const devicePagePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const fullscreenPath = path.join(packageRoot, 'app', 'connect', 'device', 'FullscreenDevicePreview.tsx');
+  const liveCardPath = path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx');
+  const apiPath = path.join(packageRoot, 'src', 'api.ts');
+  const liveSessionsServicePath = path.join(repoRoot, 'app', 'services', 'live_session_service.py');
+  const backendTestPath = path.join(repoRoot, 'tests', 'test_live_sessions_api.py');
+  const device = fs.readFileSync(devicePagePath, 'utf8');
+  const fullscreen = fs.readFileSync(fullscreenPath, 'utf8');
+  const card = fs.readFileSync(liveCardPath, 'utf8');
+  const api = fs.readFileSync(apiPath, 'utf8');
+  const service = fs.readFileSync(liveSessionsServicePath, 'utf8');
+  const backendTest = fs.readFileSync(backendTestPath, 'utf8');
+
+  assert.ok(device.includes('__connectDevicePublisherPeerDebug'));
+  assert.ok(device.includes('peerConnectionRef.current?.close()'));
+  assert.ok(device.includes('clearPublisherSignalPoll'));
+  assert.ok(device.includes('signalPollTimerRef.current = window.setInterval(pollSignal, 1000)'));
+  assert.ok(device.includes('pollSignal();'));
+  assert.ok(device.includes('api.getLiveSignalState(sessionId)'));
+  assert.ok(device.includes('await activePeer.setRemoteDescription(new RTCSessionDescription(signal.answer))'));
+  assert.ok(device.includes("setPeerStatus('answer_applied')"));
+  assert.ok(device.includes('await activePeer.addIceCandidate(candidate)'));
+  assert.ok(device.includes("peer.connectionState === 'connected' || peer.iceConnectionState === 'connected' || peer.iceConnectionState === 'completed'"));
+  const answerApplyBlock = device.slice(device.indexOf('if (signal.answer?.sdp'), device.indexOf('for (const candidate of signal.ice_from_viewer'));
+  assert.ok(!answerApplyBlock.includes("setPeerStatus('connected')"), 'publisher must not mark connected from answer existence');
+  assert.ok(device.includes('pollingLoopCount: publisherSignalPollLoopCountRef.current'));
+  assert.ok(device.includes('activePeerCount: peerConnectionRef.current ? 1 : 0'));
+  assert.ok(fullscreen.includes('peerStatus: string'));
+
+  assert.ok(card.includes('__explorerViewerPeerDebug'));
+  assert.ok(card.includes("'answer_published'"));
+  assert.ok(card.includes("'answer_confirmed'"));
+  assert.ok(card.includes("'waiting_for_track'"));
+  assert.ok(card.includes("'track_attached'"));
+  assert.ok(card.includes("'set_remote_description_failed'"));
+  assert.ok(card.includes("'set_local_description_failed'"));
+  assert.ok(card.includes("'src_object_missing'"));
+  assert.ok(card.includes('await peerConnRef.current.setRemoteDescription(new RTCSessionDescription(signal.offer))'));
+  assert.ok(card.includes('await peerConnRef.current.setLocalDescription(answer)'));
+  assert.ok(card.includes('await api.publishLiveSignalAnswer(sessionId, viewerId'));
+  assert.ok(card.includes('await peerConnRef.current.addIceCandidate(candidate)'));
+  assert.ok(card.includes('peerVideoRef.current.srcObject = stream'));
+  assert.ok(card.includes('peerVideoRef.current.onloadedmetadata'));
+  assert.ok(card.includes('peerVideoRef.current.oncanplay'));
+  assert.ok(card.includes('peerVideoRef.current.onplaying'));
+  assert.ok(card.includes("setPeerStatus('playing')"));
+  assert.ok(card.includes("setPeerStatus('failed')"));
+  assert.ok(card.includes('pollingLoopCount: viewerPollLoopCountRef.current'));
+  assert.ok(card.includes('activePeerCount: 1'));
+  assert.ok(!card.includes("setPeerStatus('connected');\n              setPeerDiagnostic('answer-posted')"));
+
+  assert.ok(api.includes("method: 'GET'"));
+  assert.ok(api.includes('/signal${query}'));
+  assert.ok(api.includes('/signal/answer'));
+  assert.ok(api.includes('/signal/ice'));
+
+  assert.ok(service.includes('superseded_by_session_id'));
+  assert.ok(service.includes('existing.status in {"previewing", "recording"}'));
+  assert.ok(backendTest.includes('test_starting_second_live_session_supersedes_previous_active_same_node_source'));
+});
+
 test('explorer separates durable live sessions from runtime viewer events', () => {
   const appPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const liveSessionsContractPath = path.join(packageRoot, 'src', 'contracts', 'liveSessions.ts');

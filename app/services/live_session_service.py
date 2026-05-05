@@ -73,6 +73,28 @@ class LiveSessionService:
     ) -> LiveSession:
         now = _utc_now_iso()
         session_id = f"sess-{uuid.uuid4().hex}"
+        for existing in self.session_registry.list_all():
+            if (
+                existing.node_id == node_id
+                and existing.source_kind == source_kind
+                and existing.status in {"previewing", "recording"}
+            ):
+                self.session_registry.upsert(
+                    LiveSession(
+                        session_id=existing.session_id,
+                        node_id=existing.node_id,
+                        source_kind=existing.source_kind,
+                        status="ended",
+                        started_at=existing.started_at,
+                        last_heartbeat_at=existing.last_heartbeat_at,
+                        chunk_count=existing.chunk_count,
+                        claim_id=existing.claim_id,
+                        latest_chunk_path=existing.latest_chunk_path,
+                        desired_action=existing.desired_action,
+                        last_control_at=existing.last_control_at,
+                        metadata={**dict(existing.metadata), "superseded_by_session_id": session_id},
+                    )
+                )
         session = LiveSession(
             session_id=session_id,
             node_id=node_id,

@@ -1,3 +1,17 @@
+## 2026-05-05 — Stabilize live WebRTC publisher/viewer peer lifecycle (new)
+- [x] Hardened Connect Device publisher peer ownership so one session-owned RTCPeerConnection publishes offer, polls `/signal`, applies viewer answers, consumes viewer ICE once, and only marks connected from peer/ICE connection state.
+- [x] Added `window.__connectDevicePublisherPeerDebug` with stream, track, offer, answer, ICE, state, polling-loop, active-peer, and failure diagnostics.
+- [x] Hardened Explorer viewer peer ownership so answer publication, answer confirmation, device ICE, remote tracks, video metadata/canplay/playing, and concrete failure reasons are tracked separately.
+- [x] Added `window.__explorerViewerPeerDebug` and status lanes that keep signaling (`answer_confirmed`) separate from media (`track_attached`/`playing`).
+- [x] Backend now supersedes older active sessions for the same `node_id` + `source_kind` when a new live session starts, preserving old sessions as ended diagnostics/history.
+- [x] Added static peer-lifecycle contracts plus backend supersession coverage.
+- [ ] Next: complete media-plane attach so one active iPhone Capture Node session reaches:
+  - device publisher: answer_applied -> connected
+  - Explorer viewer: answer_confirmed -> track_attached -> playing
+  - primary LIVE panel: one card for node_id/source_kind
+  - no black preview when peer state says connected
+  - old sessions only visible in diagnostics/history, not primary LIVE cards
+
 ## 2026-05-05 — Separate live sessions from viewer runtime events (new)
 - [x] Added strict Explorer live-session guards so `viewer_answer`, `viewer_state`, ICE, and other runtime event payloads cannot be accepted as durable `LiveSessionRecord` data.
 - [x] Changed the Explorer live panel to render only canonical durable `/api/live_sessions` records, with runtime viewer events stored as per-session diagnostics/activity only.

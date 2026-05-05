@@ -140,6 +140,8 @@ export default function ConnectDevicePage() {
   const viewerIceSeenRef = useRef<Set<string>>(new Set());
   const activeViewerIdRef = useRef<string>('viewer-broadcast');
   const signalPollTimerRef = useRef<number | null>(null);
+  const publisherSignalPollLoopCountRef = useRef(0);
+  const deviceIcePublishedCountRef = useRef(0);
   const nodeHeartbeatTimerRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
   const publisherBusyRef = useRef(false);
   const activeBroadcastSessionRef = useRef<{ session_id: string } | null>(null);
@@ -148,7 +150,7 @@ export default function ConnectDevicePage() {
   const viewerSessionIdRef = useRef<string | null>(null);
   const viewerIdRef = useRef<string>('viewer-default');
   const viewerAttachingRef = useRef<string | null>(null);
-  const [peerStatus, setPeerStatus] = useState<'idle' | 'offer-published' | 'connected' | 'failed'>('idle');
+  const [peerStatus, setPeerStatus] = useState<string>('idle');
   const [mode, setMode] = useState<'local' | 'remote'>('local');
   const [activeBroadcastSession, setActiveBroadcastSession] = useState<{ session_id: string } | null>(null);
   const [traceEvents, setTraceEvents] = useState<string[]>([]);
@@ -179,6 +181,21 @@ export default function ConnectDevicePage() {
       lastUpdatedAt: Date.now(),
     };
   }, []);
+
+  const markPublisherPeerDebug = useCallback((patch: Record<string, unknown>) => {
+    if (typeof window === 'undefined') return;
+    const current = ((window as any).__connectDevicePublisherPeerDebug || {}) as Record<string, unknown>;
+    (window as any).__connectDevicePublisherPeerDebug = {
+      ...current,
+      sessionId: peerSessionIdRef.current,
+      nodeId,
+      sourceKind: 'camera',
+      pollingLoopCount: publisherSignalPollLoopCountRef.current,
+      activePeerCount: peerConnectionRef.current ? 1 : 0,
+      ...patch,
+      lastUpdatedAt: Date.now(),
+    };
+  }, [nodeId]);
 
 
 
@@ -323,6 +340,8 @@ export default function ConnectDevicePage() {
       }
       peerConnectionRef.current?.close();
       peerConnectionRef.current = null;
+      publisherSignalPollLoopCountRef.current = 0;
+      deviceIcePublishedCountRef.current = 0;
       peerSessionIdRef.current = null;
       viewerIceSeenRef.current.clear();
       activeViewerIdRef.current = 'viewer-broadcast';
@@ -348,50 +367,101 @@ export default function ConnectDevicePage() {
     setTraceEvents((prev) => [...prev.slice(-11), line]);
   };
 
+  const clearPublisherSignalPoll = () => {
+    if (signalPollTimerRef.current != null) {
+      window.clearInterval(signalPollTimerRef.current);
+      signalPollTimerRef.current = null;
+    }
+  };
+
   const publishPeerOffer = async (sessionRecord: { session_id: string }, stream: MediaStream) => {
     const sessionId = sessionRecord.session_id;
     appendTrace(`peer:create ${sessionId}`);
     traceDevice('peer:create', { sessionId, trackCount: stream.getTracks().length });
-    const videoTrackCount = stream.getVideoTracks().length;
+    const localTrackCount = stream.getTracks().filter((track) => track.readyState === 'live').length;
+    const liveVideoTrackCount = liveVideoTracksForStream(stream).length;
     const audioTrackCount = stream.getAudioTracks().length;
-    markBroadcastDebug({ nodeId, sessionId, hasStream: true, videoTrackCount, audioTrackCount, offerCreated: false, offerPosted: false });
+    markBroadcastDebug({ nodeId, sessionId, hasStream: true, videoTrackCount: stream.getVideoTracks().length, audioTrackCount, offerCreated: false, offerPosted: false });
+    markPublisherPeerDebug({
+      sessionId,
+      hasStream: true,
+      localTrackCount,
+      liveVideoTrackCount,
+      failureReason: null,
+      deviceIcePublishedCount: deviceIcePublishedCountRef.current,
+      viewerIceSeenCount: viewerIceSeenRef.current.size,
+    });
     if (typeof window === 'undefined' || typeof RTCPeerConnection === 'undefined') {
       markBroadcastDebug({ lastPeerError: 'rtc_unavailable' });
+      markPublisherPeerDebug({ failureReason: 'rtc_unavailable' });
       setPeerStatus('failed');
       return;
     }
-    if (videoTrackCount === 0) {
+    if (liveVideoTrackCount === 0) {
       markBroadcastDebug({ lastPeerError: 'no_video_tracks' });
+      markPublisherPeerDebug({ failureReason: 'no_video_tracks' });
       setPeerStatus('failed');
       setBroadcast((prev) => ({ ...prev, stage: 'failed', waitingForAnswer: false, error: makeBroadcastFailure('missing_media_stream', 'no_video_tracks'), updatedAt: Date.now() }));
       return;
     }
+    clearPublisherSignalPoll();
     peerConnectionRef.current?.close();
+    const peerCreatedAt = Date.now();
     const peer = new RTCPeerConnection();
     peerConnectionRef.current = peer;
     peerSessionIdRef.current = sessionId;
     viewerIceSeenRef.current.clear();
+    deviceIcePublishedCountRef.current = 0;
     activeViewerIdRef.current = 'viewer-broadcast';
-    peer.onconnectionstatechange = () => {
-      traceDevice('peer:connection-state', { state: peer.connectionState });
-      markBroadcastDebug({ peerConnectionState: peer.connectionState });
-      if (peer.connectionState === 'connected') setPeerStatus('connected');
-      if (peer.connectionState === 'failed' || peer.connectionState === 'disconnected') setPeerStatus('failed');
+    markPublisherPeerDebug({ peerCreatedAt, connectionState: peer.connectionState, iceConnectionState: peer.iceConnectionState, iceGatheringState: peer.iceGatheringState, signalingState: peer.signalingState });
+    const publishStateDebug = () => {
+      markPublisherPeerDebug({
+        signalingState: peer.signalingState,
+        iceConnectionState: peer.iceConnectionState,
+        iceGatheringState: peer.iceGatheringState,
+        connectionState: peer.connectionState,
+        viewerIceSeenCount: viewerIceSeenRef.current.size,
+        deviceIcePublishedCount: deviceIcePublishedCountRef.current,
+      });
+      if (peer.connectionState === 'connected' || peer.iceConnectionState === 'connected' || peer.iceConnectionState === 'completed') {
+        setPeerStatus('connected');
+        setBroadcast((prev) => ({ ...prev, stage: 'connected', waitingForAnswer: false, updatedAt: Date.now() }));
+      }
+      if (peer.connectionState === 'failed' || peer.iceConnectionState === 'failed') {
+        markPublisherPeerDebug({ failureReason: 'peer_failed' });
+        setPeerStatus('failed');
+      }
+      if (peer.connectionState === 'disconnected' || peer.iceConnectionState === 'disconnected') {
+        markPublisherPeerDebug({ failureReason: 'peer_disconnected' });
+        setPeerStatus('disconnected');
+      }
     };
-    stream.getTracks().forEach((track) => peer.addTrack(track, stream));
+    peer.onconnectionstatechange = publishStateDebug;
+    peer.oniceconnectionstatechange = publishStateDebug;
+    peer.onicegatheringstatechange = publishStateDebug;
+    peer.onsignalingstatechange = publishStateDebug;
+    stream.getTracks().filter((track) => track.readyState === 'live').forEach((track) => peer.addTrack(track, stream));
     peer.onicecandidate = (event) => {
       if (!event.candidate) return;
-      void api.publishLiveSignalIce(sessionId, 'device', activeViewerIdRef.current, event.candidate.toJSON(), nodeId || undefined).catch(() => undefined);
+      deviceIcePublishedCountRef.current += 1;
+      markPublisherPeerDebug({ deviceIcePublishedCount: deviceIcePublishedCountRef.current });
+      void api.publishLiveSignalIce(sessionId, 'device', activeViewerIdRef.current, event.candidate.toJSON(), nodeId || undefined).catch((error) => {
+        markPublisherPeerDebug({ failureReason: 'device_ice_publish_failed', iceError: error instanceof Error ? error.message : String(error) });
+      });
     };
+    const offerCreatedAt = Date.now();
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
     markBroadcastDebug({ offerCreated: true });
+    markPublisherPeerDebug({ offerCreatedAt, signalingState: peer.signalingState });
     try {
       await api.publishLiveSignalOffer(sessionId, { type: 'offer', sdp: offer.sdp || '' }, nodeId || undefined);
       markBroadcastDebug({ offerPosted: true, offerPostStatus: 'ok' });
+      markPublisherPeerDebug({ offerPublishedAt: Date.now() });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       markBroadcastDebug({ offerPosted: false, offerPostStatus: message, lastBroadcastError: message });
+      markPublisherPeerDebug({ failureReason: 'offer_publish_failed' });
       setPeerStatus('failed');
       setBroadcast((prev) => ({ ...prev, stage: 'failed', waitingForAnswer: false, error: makeBroadcastFailure('offer_publish_failed', err), updatedAt: Date.now() }));
       throw err;
@@ -402,6 +472,7 @@ export default function ConnectDevicePage() {
     if (!live.ok) {
       appendTrace(`peer:api-live-mismatch ${live.reason}`);
       markBroadcastDebug({ lastBroadcastError: `live_registry_mismatch:${live.reason}` });
+      markPublisherPeerDebug({ failureReason: `live_registry_mismatch:${live.reason}` });
       setBroadcast((prev) => ({ ...prev, stage: 'failed', waitingForAnswer: false, error: makeBroadcastFailure('live_registry_mismatch', live.reason), updatedAt: Date.now() }));
       if (live.reason === 'session_not_listed' || live.reason === 'node_mismatch') {
         peer.close();
@@ -412,29 +483,39 @@ export default function ConnectDevicePage() {
     traceDevice('peer:api-live-confirmed', { sessionId, exists: true });
     appendTrace('peer:api-live-confirmed');
     setBroadcast((prev) => ({ ...prev, stage: 'waiting_for_answer', waitingForAnswer: true, updatedAt: Date.now() }));
-    if (signalPollTimerRef.current != null) window.clearInterval(signalPollTimerRef.current);
     let signalPollBusy = false;
-    signalPollTimerRef.current = window.setInterval(() => {
+    const pollSignal = () => {
       if (signalPollBusy) return;
       signalPollBusy = true;
+      publisherSignalPollLoopCountRef.current += 1;
+      markPublisherPeerDebug({ pollingLoopCount: publisherSignalPollLoopCountRef.current });
       void api.getLiveSignalState(sessionId).then(async (signal) => {
         const activePeer = peerConnectionRef.current;
-        if (!activePeer) return;
+        if (!activePeer || peerSessionIdRef.current !== sessionId) return;
         if (signal.primary_viewer_id) activeViewerIdRef.current = signal.primary_viewer_id;
-        if (signal.answer?.sdp && !activePeer.currentRemoteDescription) {
+        if (signal.answer?.sdp && !activePeer.currentRemoteDescription && !activePeer.remoteDescription) {
+          markPublisherPeerDebug({ answerSeenAt: Date.now() });
           await activePeer.setRemoteDescription(new RTCSessionDescription(signal.answer));
-          appendTrace(`peer:answer-received ${sessionId}`);
-          setBroadcast((prev) => ({ ...prev, stage: 'connected', waitingForAnswer: false, updatedAt: Date.now() }));
+          appendTrace(`peer:answer-applied ${sessionId}`);
+          setPeerStatus('answer_applied');
+          setBroadcast((prev) => ({ ...prev, stage: 'waiting_for_answer', waitingForAnswer: false, updatedAt: Date.now() }));
+          markPublisherPeerDebug({ answerAppliedAt: Date.now(), signalingState: activePeer.signalingState });
         }
         for (const candidate of signal.ice_from_viewer || []) {
           const key = `${candidate.candidate}|${candidate.sdpMid || ''}|${candidate.sdpMLineIndex ?? ''}`;
           if (viewerIceSeenRef.current.has(key)) continue;
           viewerIceSeenRef.current.add(key);
           await activePeer.addIceCandidate(candidate);
+          markPublisherPeerDebug({ viewerIceSeenCount: viewerIceSeenRef.current.size });
         }
-      }).catch(() => undefined).finally(() => { signalPollBusy = false; });
-    }, 1000);
+      }).catch((error) => {
+        markPublisherPeerDebug({ failureReason: 'signal_poll_failed', signalPollError: error instanceof Error ? error.message : String(error) });
+      }).finally(() => { signalPollBusy = false; });
+    };
+    pollSignal();
+    signalPollTimerRef.current = window.setInterval(pollSignal, 1000);
   };
+
 
   const handleStartBroadcast = async () => {
     if (publisherBusyRef.current) return false;

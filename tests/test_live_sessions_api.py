@@ -349,3 +349,42 @@ def test_live_session_registry_owner_consistent_across_start_read_signal_and_hea
     fetched_after_heartbeat = client.get(f"/api/live_sessions/{session_id}")
     assert fetched_after_heartbeat.status_code == 200
     assert fetched_after_heartbeat.headers["x-live-session-registry-id"] == registry_id
+
+
+def test_starting_second_live_session_supersedes_previous_active_same_node_source(client):
+    node_id, token = _register_node_auth(client, "runner-live-supersede")
+    headers = _auth_headers(node_id, token)
+
+    first = client.post(
+        "/api/live_sessions/start",
+        json={"node_id": node_id, "source_kind": "camera"},
+        headers=headers,
+    )
+    assert first.status_code == 200
+    first_id = first.json()["session_id"]
+
+    second = client.post(
+        "/api/live_sessions/start",
+        json={"node_id": node_id, "source_kind": "camera"},
+        headers=headers,
+    )
+    assert second.status_code == 200
+    second_id = second.json()["session_id"]
+    assert second_id != first_id
+
+    listed = client.get("/api/live_sessions")
+    assert listed.status_code == 200
+    active_ids = [entry["session_id"] for entry in listed.json()]
+    assert active_ids == [second_id]
+
+    old = client.get(f"/api/live_sessions/{first_id}")
+    assert old.status_code == 200
+    assert old.json()["status"] == "ended"
+    assert old.json()["metadata"]["superseded_by_session_id"] == second_id
+
+    signal = client.get(f"/api/live_sessions/{second_id}/signal", params={"viewer_id": "viewer-current"})
+    assert signal.status_code == 200
+
+    heartbeat = client.post(f"/api/live_sessions/{second_id}/heartbeat", headers=headers)
+    assert heartbeat.status_code == 200
+    assert heartbeat.json()["session_id"] == second_id

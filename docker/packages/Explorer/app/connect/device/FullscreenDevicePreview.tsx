@@ -27,7 +27,7 @@ interface FullscreenDevicePreviewProps {
   chunkCount?: number;
   sourceKind?: string | null;
   error?: string | null;
-  peerStatus: 'idle' | 'offer-published' | 'connected' | 'failed';
+  peerStatus: string;
   mode: 'local' | 'remote';
   onModeChange: (mode: 'local' | 'remote') => void;
   videoRef: RefObject<HTMLVideoElement>;

@@ -35,7 +35,11 @@ const EXPLORER_LIVE_FAILURE_REASONS = [
   'no_offer',
   'answer_post_failed',
   'answer_not_confirmed',
+  'no_device_ice',
+  'set_remote_description_failed',
+  'set_local_description_failed',
   'no_track',
+  'src_object_missing',
   'play_failed',
   'ice_failed',
   'peer_failed',
@@ -51,6 +55,16 @@ function markExplorerLiveFlowDebug(patch: Record<string, unknown>) {
     ...current,
     invalidAnswerGetDetected: false,
     invalidViewerHeartbeatDetected: false,
+    ...patch,
+    lastUpdatedAt: Date.now(),
+  };
+}
+
+function markExplorerViewerPeerDebug(patch: Record<string, unknown>) {
+  if (typeof window === 'undefined') return;
+  const current = ((window as any).__explorerViewerPeerDebug || {}) as Record<string, unknown>;
+  (window as any).__explorerViewerPeerDebug = {
+    ...current,
     ...patch,
     lastUpdatedAt: Date.now(),
   };
@@ -110,10 +124,12 @@ export function LiveSourceCard({
   useEffect(() => { if (autoStartPeer) setPeerEnabled(true); }, [autoStartPeer]);
   const [peerStream, setPeerStream] = useState<MediaStream | null>(null);
   const [peerError, setPeerError] = useState<string | null>(null);
-  const [peerStatus, setPeerStatus] = useState<'idle' | 'waiting_for_offer' | 'answering' | 'answered' | 'connected' | 'playing' | 'failed' | 'stale_session_not_found'>('idle');
+  const [peerStatus, setPeerStatus] = useState<'idle' | 'waiting_for_offer' | 'answering' | 'answer_published' | 'answer_confirmed' | 'waiting_for_track' | 'track_attached' | 'connected' | 'playing' | 'failed' | 'stale_session_not_found'>('idle');
   const [peerDiagnostic, setPeerDiagnostic] = useState<string | null>(null);
   const [peerRetryToken, setPeerRetryToken] = useState(0);
   const answerPostedRef = useRef(false);
+  const viewerPollLoopCountRef = useRef(0);
+  const viewerIcePublishedCountRef = useRef(0);
   const sessionRef = useRef(session);
   sessionRef.current = session;
   const api = useMemo(() => createApiClient(apiBase), [apiBase]);
@@ -152,6 +168,9 @@ export function LiveSourceCard({
       peerConnRef.current = null;
       deviceIceSeenRef.current.clear();
       answerPostedRef.current = false;
+      viewerPollLoopCountRef.current = 0;
+      viewerIcePublishedCountRef.current = 0;
+      markExplorerViewerPeerDebug({ activePeerCount: 0 });
       if (peerVideoRef.current) peerVideoRef.current.srcObject = null;
       StreamHub.delete(sessionId);
       setPeerStream(null);
@@ -199,6 +218,17 @@ export function LiveSourceCard({
       invalidAnswerGetDetected: false,
       invalidViewerHeartbeatDetected: false,
     });
+    markExplorerViewerPeerDebug({
+      sessionId,
+      viewerId,
+      failureReason: null,
+      remoteTrackCount: 0,
+      deviceIceSeenCount: 0,
+      viewerIcePublishedCount: viewerIcePublishedCountRef.current,
+      videoSrcObjectSet: false,
+      pollingLoopCount: viewerPollLoopCountRef.current,
+      activePeerCount: 1,
+    });
 
     noTrackTimer = window.setTimeout(() => {
       if (disposed || remoteTrackCount > 0) return;
@@ -221,6 +251,12 @@ export function LiveSourceCard({
       if (peerVideoRef.current) {
         peerVideoRef.current.srcObject = stream;
         videoSrcObjectSet = true;
+        setPeerStatus('track_attached');
+        setPeerDiagnostic('track_attached');
+        markExplorerViewerPeerDebug({ videoSrcObjectSet: true, remoteTrackCount, videoLoadedMetadataAt: null, videoCanPlayAt: null });
+        peerVideoRef.current.onloadedmetadata = () => markExplorerViewerPeerDebug({ videoLoadedMetadataAt: Date.now() });
+        peerVideoRef.current.oncanplay = () => markExplorerViewerPeerDebug({ videoCanPlayAt: Date.now() });
+        peerVideoRef.current.onplaying = () => markExplorerViewerPeerDebug({ videoPlayingAt: Date.now(), failureReason: null });
         void peerVideoRef.current.play().then(() => {
           if (!disposed) {
             setPeerStatus('playing');
@@ -233,16 +269,17 @@ export function LiveSourceCard({
               videoSrcObjectSet: true,
               videoPlayResolved: true,
               failureReason: null,
+              videoPlayingAt: Date.now(),
             });
           }
         }).catch((error) => {
           if (!disposed) {
-            setPeerStatus('connected');
+            setPeerStatus('failed');
             setPeerDiagnostic('play_failed');
             markExplorerLiveFlowDebug({
               watchLiveSessionId: sessionId,
               viewerId,
-              viewerStatus: 'connected',
+              viewerStatus: 'failed',
               remoteTrackCount,
               videoSrcObjectSet: true,
               videoPlayResolved: false,
@@ -251,6 +288,9 @@ export function LiveSourceCard({
             });
           }
         });
+      } else {
+        setFailure('src_object_missing', 'Live viewer video element is unavailable.');
+        markExplorerViewerPeerDebug({ failureReason: 'src_object_missing' });
       }
       setPeerStream(stream);
       setPeerDiagnostic('remote-track-attached');
@@ -261,17 +301,24 @@ export function LiveSourceCard({
         videoSrcObjectSet,
         failureReason: null,
       });
+      markExplorerViewerPeerDebug({ remoteTrackCount, videoSrcObjectSet, failureReason: null });
       onRemoteStream?.(sessionRef.current, stream);
     };
-    peer.onconnectionstatechange = () => {
+    const publishViewerPeerState = () => {
+      markExplorerViewerPeerDebug({ signalingState: peer.signalingState, iceConnectionState: peer.iceConnectionState, connectionState: peer.connectionState });
       markExplorerLiveFlowDebug({ watchLiveSessionId: sessionId, viewerId, viewerStatus: peer.connectionState });
-      if (peer.connectionState === 'connected') setPeerStatus('connected');
+      if ((peer.connectionState === 'connected' || peer.iceConnectionState === 'connected' || peer.iceConnectionState === 'completed') && remoteTrackCount === 0) setPeerStatus('waiting_for_track');
       if (peer.connectionState === 'failed' || peer.connectionState === 'disconnected') {
         setFailure('peer_failed');
       }
     };
+    peer.onconnectionstatechange = publishViewerPeerState;
+    peer.oniceconnectionstatechange = publishViewerPeerState;
+    peer.onsignalingstatechange = publishViewerPeerState;
     peer.onicecandidate = (event) => {
       if (!event.candidate) return;
+      viewerIcePublishedCountRef.current += 1;
+      markExplorerViewerPeerDebug({ viewerIcePublishedCount: viewerIcePublishedCountRef.current });
       void api.publishLiveSignalIce(sessionId, 'viewer', viewerId, event.candidate.toJSON()).catch((error) => {
         if (isStaleSessionError(error)) {
           dropStaleSession('signal/ice');
@@ -295,6 +342,11 @@ export function LiveSourceCard({
         answerConfirmed: confirmed,
         answerPostStatus: confirmed ? 'confirmed' : 'posted_not_confirmed',
       });
+      if (confirmed) {
+        setPeerStatus('answer_confirmed');
+        setPeerDiagnostic('answer_confirmed');
+        markExplorerViewerPeerDebug({ answerConfirmedAt: Date.now(), failureReason: null });
+      }
       if (!confirmed) {
         setPeerDiagnostic('answer_not_confirmed');
         markExplorerLiveFlowDebug({ failureReason: 'answer_not_confirmed' });
@@ -302,6 +354,8 @@ export function LiveSourceCard({
       return confirmedSignal;
     };
     const pollSignal = async () => {
+      viewerPollLoopCountRef.current += 1;
+      markExplorerViewerPeerDebug({ pollingLoopCount: viewerPollLoopCountRef.current });
       try {
         const signal = await api.getLiveSignalState(sessionId, viewerId);
         if (disposed || !signal || !peerConnRef.current) return;
@@ -326,9 +380,23 @@ export function LiveSourceCard({
             setPeerStatus('answering');
             setPeerDiagnostic('set-remote-description');
             markExplorerLiveFlowDebug({ viewerStatus: 'answering' });
-            await peerConnRef.current.setRemoteDescription(new RTCSessionDescription(signal.offer));
+            try {
+              markExplorerViewerPeerDebug({ offerSeenAt: Date.now() });
+              await peerConnRef.current.setRemoteDescription(new RTCSessionDescription(signal.offer));
+            } catch (error) {
+              setFailure('set_remote_description_failed', 'Live viewer failed to apply device offer.');
+              markExplorerViewerPeerDebug({ failureReason: 'set_remote_description_failed', setRemoteDescriptionError: error instanceof Error ? error.message : String(error) });
+              return;
+            }
             const answer = await peerConnRef.current.createAnswer();
-            await peerConnRef.current.setLocalDescription(answer);
+            try {
+              markExplorerViewerPeerDebug({ answerCreatedAt: Date.now() });
+              await peerConnRef.current.setLocalDescription(answer);
+            } catch (error) {
+              setFailure('set_local_description_failed', 'Live viewer failed to prepare answer.');
+              markExplorerViewerPeerDebug({ failureReason: 'set_local_description_failed', setLocalDescriptionError: error instanceof Error ? error.message : String(error) });
+              return;
+            }
             sdpToSend = answer.sdp || '';
           } else if (peerConnRef.current.localDescription?.sdp) {
             sdpToSend = peerConnRef.current.localDescription.sdp;
@@ -337,9 +405,10 @@ export function LiveSourceCard({
             try {
               await api.publishLiveSignalAnswer(sessionId, viewerId, { type: 'answer', sdp: sdpToSend });
               answerPostedRef.current = true;
-              setPeerStatus('answered');
-              setPeerDiagnostic('answer-posted');
-              markExplorerLiveFlowDebug({ answerPostStatus: 'posted', viewerStatus: 'answered', failureReason: null });
+              setPeerStatus('answer_published');
+              setPeerDiagnostic('answer_published');
+              markExplorerViewerPeerDebug({ answerPublishedAt: Date.now(), failureReason: null });
+              markExplorerLiveFlowDebug({ answerPostStatus: 'posted', viewerStatus: 'answer_published', failureReason: null });
               await confirmAnswer();
             } catch (error) {
               if (isStaleSessionError(error)) {
@@ -361,6 +430,7 @@ export function LiveSourceCard({
           deviceIceSeenRef.current.add(key);
           try {
             await peerConnRef.current.addIceCandidate(candidate);
+            markExplorerViewerPeerDebug({ deviceIceSeenCount: deviceIceSeenRef.current.size });
           } catch (error) {
             setPeerDiagnostic('ice_failed');
             markExplorerLiveFlowDebug({
@@ -398,6 +468,9 @@ export function LiveSourceCard({
       peerConnRef.current = null;
       deviceIceSeenRef.current.clear();
       answerPostedRef.current = false;
+      viewerPollLoopCountRef.current = 0;
+      viewerIcePublishedCountRef.current = 0;
+      markExplorerViewerPeerDebug({ activePeerCount: 0 });
       if (peerVideoRef.current) peerVideoRef.current.srcObject = null;
       StreamHub.delete(sessionId);
       setPeerStream(null);
