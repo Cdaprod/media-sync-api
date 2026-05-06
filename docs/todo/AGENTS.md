@@ -1,3 +1,10 @@
+## 2026-05-06 — WebRTC ICE candidate ordering and role-correct application (new)
+- [x] Added shared ICE helpers for candidate keys, candidate type extraction, safe `addIceCandidate(...)`, and selected candidate-pair stats summarization.
+- [x] Explorer viewer now queues device ICE until the remote offer is applied, dedupes by candidate key, flushes after `setRemoteDescription(offer)`, and keeps polling/applying device ICE without failing just because playback has not rendered.
+- [x] Connect Device publisher now queues viewer ICE until the remote answer is applied, dedupes by candidate key, flushes after `setRemoteDescription(answer)`, and keeps polling after answer application until connected/failed/stopped.
+- [x] Added viewer/publisher ICE debug counters for received/applied/queued/error candidates plus selected candidate pair and local/remote candidate types.
+- [ ] Next validation item: inspect `__explorerViewerPeerDebug.deviceIceReceivedCount/deviceIceAppliedCount` and `__connectDevicePublisherPeerDebug.viewerIceReceivedCount/viewerIceAppliedCount`; both applied counts must be greater than zero before investigating TURN/STUN/network policy.
+
 ## 2026-05-06 — Safari WebRTC playback boundary and RTP diagnostics (new)
 - [x] Added Explorer viewer inbound RTP stats in `window.__explorerViewerPeerDebug` so real Safari runs can distinguish attached tracks with no RTP from RTP with no decoded/rendered frames.
 - [x] Added Connect Device publisher outbound RTP stats in `window.__connectDevicePublisherPeerDebug` with publisher media classification for no outbound RTP, flowing RTP, and non-live local camera tracks.

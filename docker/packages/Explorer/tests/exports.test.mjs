@@ -63,6 +63,7 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'awaitVisibleVideoPaint.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'runtimeChips.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'StreamHub.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'live', 'iceCandidateUtils.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'useRuntimeController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'useLivePreviewState.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'useRuntimeEventReactions.ts')));
@@ -531,7 +532,8 @@ test('live WebRTC peer actors own publisher/viewer media-plane transitions', () 
   assert.ok(device.includes('api.getLiveSignalState(sessionId)'));
   assert.ok(device.includes('await activePeer.setRemoteDescription(new RTCSessionDescription(signal.answer))'));
   assert.ok(device.includes("setPeerStatus('answer_applied')"));
-  assert.ok(device.includes('await activePeer.addIceCandidate(candidate)'));
+  assert.ok(device.includes("await applyViewerIceCandidate(candidate, 'poll')"));
+  assert.ok(device.includes('await flushQueuedViewerIce()'));
   assert.ok(device.includes("peer.connectionState === 'connected' || peer.iceConnectionState === 'connected' || peer.iceConnectionState === 'completed'"));
   const answerApplyBlock = device.slice(device.indexOf('if (signal.answer?.sdp'), device.indexOf('for (const candidate of signal.ice_from_viewer'));
   assert.ok(!answerApplyBlock.includes("setPeerStatus('connected')"), 'publisher must not mark connected from answer existence');
@@ -550,7 +552,8 @@ test('live WebRTC peer actors own publisher/viewer media-plane transitions', () 
   assert.ok(card.includes('await peerConnRef.current.setRemoteDescription(new RTCSessionDescription(signal.offer))'));
   assert.ok(card.includes('await peerConnRef.current.setLocalDescription(answer)'));
   assert.ok(card.includes('await api.publishLiveSignalAnswer(sessionId, viewerId'));
-  assert.ok(card.includes('await peerConnRef.current.addIceCandidate(candidate)'));
+  assert.ok(card.includes("await applyDeviceIceCandidate(candidate, 'poll')"));
+  assert.ok(card.includes('await flushQueuedDeviceIce()'));
   assert.ok(card.includes('video.srcObject = stream'));
   assert.ok(card.includes('video.onloadedmetadata'));
   assert.ok(card.includes('video.oncanplay'));
@@ -4228,6 +4231,59 @@ test('Safari WebRTC playback boundary preserves srcObject and samples RTP stats'
   assert.ok(device.includes('local_track_not_live'));
   assert.ok(device.includes('replaceTrack(track)'));
   assert.ok(!device.includes('publisher_failed'));
+});
+
+
+test('WebRTC ICE candidates are queued, deduped, flushed, and debug-counted by role', () => {
+  const card = fs.readFileSync(path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx'), 'utf8');
+  const device = fs.readFileSync(path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx'), 'utf8');
+  const iceUtils = fs.readFileSync(path.join(packageRoot, 'src', 'live', 'iceCandidateUtils.ts'), 'utf8');
+
+  assert.ok(iceUtils.includes('export function getIceCandidateKey'));
+  assert.ok(iceUtils.includes('export function getIceCandidateType'));
+  assert.ok(iceUtils.includes('export async function safeAddIceCandidate'));
+  assert.ok(iceUtils.includes('export async function summarizeCandidatePairFromStats'));
+  assert.ok(iceUtils.includes('selectedCandidatePairId'));
+
+  for (const marker of [
+    'queuedDeviceIceRef',
+    'appliedDeviceIceKeysRef',
+    'deviceIceReceivedCount',
+    'deviceIceAppliedCount',
+    'deviceIceQueuedCount',
+    'deviceIceAddErrors',
+    'selectedCandidatePair',
+    'localCandidateTypes',
+    'remoteCandidateTypes',
+    'await flushQueuedDeviceIce()',
+    "await applyDeviceIceCandidate(candidate, 'poll')",
+    'selected-candidate-pair-timeout',
+    "? 'waiting_for_ice'",
+    "? 'ice_connected'",
+  ]) {
+    assert.ok(card.includes(marker), `LiveSourceCard missing ICE marker ${marker}`);
+  }
+  assert.ok(!card.includes("iceDisconnected) && remoteTrackCount === 0"));
+
+  for (const marker of [
+    'queuedViewerIceRef',
+    'appliedViewerIceKeysRef',
+    'viewerAnswerSeen',
+    'viewerAnswerApplied',
+    'viewerIceReceivedCount',
+    'viewerIceAppliedCount',
+    'viewerIceQueuedCount',
+    'viewerIceAddErrors',
+    'deviceIcePublishedCount',
+    'selectedCandidatePair',
+    'localCandidateTypes',
+    'remoteCandidateTypes',
+    'await flushQueuedViewerIce()',
+    "await applyViewerIceCandidate(candidate, 'poll')",
+  ]) {
+    assert.ok(device.includes(marker), `Connect Device missing ICE marker ${marker}`);
+  }
+  assert.ok(device.includes("restartReason: 'publisher-already-answer-applied'"));
 });
 
 test('device publisher peer is session-owned and republish is explicit', () => {

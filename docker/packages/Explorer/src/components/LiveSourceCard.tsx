@@ -6,6 +6,7 @@ import { createApiClient } from '../api';
 import type { WebRtcLiveSession } from '../contracts/live';
 import type { LiveSessionRecord } from '../types/liveSession';
 import { StreamHub } from '../runtime/StreamHub';
+import { getIceCandidateKey, safeAddIceCandidate, summarizeCandidatePairFromStats } from '../live/iceCandidateUtils';
 
 function usePreviewUrl(apiBase: string, sessionId: string, active: boolean) {
   const [url, setUrl] = useState('');
@@ -58,7 +59,7 @@ type ExplorerLiveFailureReason = typeof EXPLORER_LIVE_FAILURE_REASONS[number];
 type ViewerSignalingStatus = 'idle' | 'initializing' | 'waiting_for_offer' | 'offer_seen' | 'answer_publishing' | 'answer_published' | 'answer_confirmed' | 'failed' | 'stale_session_not_found';
 type ViewerMediaStatus = 'idle' | 'waiting_for_track' | 'remote_track_not_emitted' | 'track_attached' | 'video_src_object_not_set' | 'video_has_no_live_tracks';
 type ViewerPlaybackStatus = 'idle' | 'waiting_for_play' | 'playing' | 'video_playback_failed' | 'video_playback_interrupted' | 'video_playback_blocked';
-type ViewerIceStatus = 'idle' | 'checking' | 'connected' | 'disconnected' | 'ice_exchange_failed' | 'peer_ice_failed_before_track';
+type ViewerIceStatus = 'idle' | 'checking' | 'waiting_for_ice' | 'connected' | 'ice_connected' | 'disconnected' | 'ice_exchange_failed' | 'peer_ice_failed_before_track';
 type ViewerPeerStatus = ViewerSignalingStatus | ViewerMediaStatus | ViewerPlaybackStatus | 'failed' | 'connected' | 'answering';
 
 type ViewerMediaFailureClass =
@@ -165,7 +166,10 @@ export function LiveSourceCard({
   const imgRef = useRef<HTMLImageElement>(null);
   const peerVideoRef = useRef<HTMLVideoElement | null>(null);
   const peerConnRef = useRef<RTCPeerConnection | null>(null);
-  const deviceIceSeenRef = useRef<Set<string>>(new Set());
+  const deviceIceReceivedKeysRef = useRef<Set<string>>(new Set());
+  const appliedDeviceIceKeysRef = useRef<Set<string>>(new Set());
+  const queuedDeviceIceRef = useRef<RTCIceCandidateInit[]>([]);
+  const deviceIceAddErrorsRef = useRef<Array<Record<string, string>>>([]);
   const viewerIdRef = useRef(`viewer-${Math.random().toString(36).slice(2, 10)}`);
   const [peerEnabled, setPeerEnabled] = useState(autoStartPeer);
   useEffect(() => { if (autoStartPeer) setPeerEnabled(true); }, [autoStartPeer]);
@@ -235,6 +239,7 @@ export function LiveSourceCard({
     let poll: number | null = null;
     let noTrackTimer: number | null = null;
     let statsPoll: number | null = null;
+    let selectedCandidatePairTimeoutReported = false;
     const setFailure = (reason: ExplorerLiveFailureReason, message?: string) => {
       const stale = reason === 'stale_session_not_found';
       const mediaOnly = reason === 'video_playback_failed'
@@ -270,7 +275,10 @@ export function LiveSourceCard({
       if (noTrackTimer != null) window.clearTimeout(noTrackTimer);
       peerConnRef.current?.close();
       peerConnRef.current = null;
-      deviceIceSeenRef.current.clear();
+      deviceIceReceivedKeysRef.current.clear();
+      appliedDeviceIceKeysRef.current.clear();
+      queuedDeviceIceRef.current = [];
+      deviceIceAddErrorsRef.current = [];
       answerPostedRef.current = false;
       viewerPollLoopCountRef.current = 0;
       viewerIcePublishedCountRef.current = 0;
@@ -310,7 +318,10 @@ export function LiveSourceCard({
     viewerActorCreatedAtRef.current = Date.now();
     const peer = new RTCPeerConnection();
     peerConnRef.current = peer;
-    deviceIceSeenRef.current.clear();
+    deviceIceReceivedKeysRef.current.clear();
+    appliedDeviceIceKeysRef.current.clear();
+    queuedDeviceIceRef.current = [];
+    deviceIceAddErrorsRef.current = [];
     setPeerError(null);
     setPeerDiagnostic('initializing');
     setPeerStatus('initializing' as typeof peerStatus);
@@ -369,6 +380,58 @@ export function LiveSourceCard({
         failureReason: 'remote_track_not_emitted',
       });
     }, 10000);
+
+    const publishIceCandidateDebug = async (patch: Record<string, unknown> = {}) => {
+      let statsPatch: Record<string, unknown> = {};
+      if (peerConnRef.current) {
+        try {
+          statsPatch = await summarizeCandidatePairFromStats(peerConnRef.current);
+        } catch (error) {
+          statsPatch = { candidatePairStatsError: error instanceof Error ? error.message : String(error) };
+        }
+      }
+      markExplorerViewerPeerDebug({
+        deviceIceReceivedCount: deviceIceReceivedKeysRef.current.size,
+        deviceIceAppliedCount: appliedDeviceIceKeysRef.current.size,
+        deviceIceQueuedCount: queuedDeviceIceRef.current.length,
+        deviceIceAddErrors: deviceIceAddErrorsRef.current,
+        viewerIcePublishedCount: viewerIcePublishedCountRef.current,
+        iceConnectionState: peerConnRef.current?.iceConnectionState ?? null,
+        connectionState: peerConnRef.current?.connectionState ?? null,
+        selectedCandidatePair: null,
+        localCandidateTypes: [],
+        remoteCandidateTypes: [],
+        ...statsPatch,
+        ...patch,
+      });
+    };
+
+    const applyDeviceIceCandidate = async (candidate: RTCIceCandidateInit, source: 'poll' | 'flush') => {
+      const activePeer = peerConnRef.current;
+      if (!activePeer || disposed) return;
+      const key = getIceCandidateKey(candidate);
+      if (!key.trim() || appliedDeviceIceKeysRef.current.has(key)) return;
+      if (!deviceIceReceivedKeysRef.current.has(key)) deviceIceReceivedKeysRef.current.add(key);
+      if (!activePeer.remoteDescription && !activePeer.currentRemoteDescription) {
+        if (!queuedDeviceIceRef.current.some((queued) => getIceCandidateKey(queued) === key)) queuedDeviceIceRef.current.push(candidate);
+        await publishIceCandidateDebug({ queuedDeviceIceReason: 'remote-description-not-ready', lastDeviceIceSource: source });
+        return;
+      }
+      const result = await safeAddIceCandidate(activePeer, candidate, `viewer-device-ice-${source}`);
+      if (result.ok) {
+        appliedDeviceIceKeysRef.current.add(key);
+      } else {
+        deviceIceAddErrorsRef.current = [...deviceIceAddErrorsRef.current.slice(-9), { key, name: result.errorName, message: result.errorMessage }];
+      }
+      await publishIceCandidateDebug({ lastDeviceIceSource: source });
+    };
+
+    const flushQueuedDeviceIce = async () => {
+      const queued = queuedDeviceIceRef.current;
+      queuedDeviceIceRef.current = [];
+      for (const candidate of queued) await applyDeviceIceCandidate(candidate, 'flush');
+      await publishIceCandidateDebug({ flushedDeviceIceCount: queued.length });
+    };
 
     const classifyMediaFailure = (patch: Record<string, unknown> = {}): ViewerMediaFailureClass => {
       const video = peerVideoRef.current;
@@ -584,15 +647,13 @@ export function LiveSourceCard({
       const iceConnected = peer.connectionState === 'connected' || peer.iceConnectionState === 'connected' || peer.iceConnectionState === 'completed';
       const iceFailed = peer.connectionState === 'failed' || peer.iceConnectionState === 'failed';
       const iceDisconnected = peer.connectionState === 'disconnected' || peer.iceConnectionState === 'disconnected';
-      const nextIceStatus: ViewerIceStatus = iceConnected ? 'connected' : (iceFailed ? 'ice_exchange_failed' : (iceDisconnected ? 'disconnected' : 'checking'));
+      const nextIceStatus: ViewerIceStatus = iceConnected ? 'ice_connected' : (iceFailed ? 'ice_exchange_failed' : (iceDisconnected ? 'disconnected' : (answerPostedRef.current ? 'waiting_for_ice' : 'checking')));
       setIceStatus(nextIceStatus);
-      markExplorerViewerPeerDebug({ signalingState: peer.signalingState, iceConnectionState: peer.iceConnectionState, connectionState: peer.connectionState, iceStatus: nextIceStatus, remoteTrackCount });
+      void publishIceCandidateDebug({ signalingState: peer.signalingState, iceStatus: nextIceStatus, remoteTrackCount });
       markExplorerLiveFlowDebug({ watchLiveSessionId: sessionId, viewerId, viewerStatus: lastStableStateRef.current, iceStatus: nextIceStatus, mediaStatus, playbackStatus });
-      if (iceConnected && remoteTrackCount === 0) publishViewerState('waiting_for_track', 'waiting_for_track', { media: 'waiting_for_track', ice: 'connected' });
-      if ((iceFailed || iceDisconnected) && remoteTrackCount === 0) {
-        setFailure('peer_ice_failed_before_track', 'ICE disconnected before a remote media track was emitted.');
-      } else if (iceFailed) {
-        setFailure('ice_exchange_failed', 'ICE failed after media track attachment.');
+      if (iceConnected && remoteTrackCount === 0) publishViewerState('waiting_for_track', 'waiting_for_track', { media: 'waiting_for_track', ice: 'ice_connected' });
+      if (iceFailed) {
+        setFailure(remoteTrackCount === 0 ? 'peer_ice_failed_before_track' : 'ice_exchange_failed', remoteTrackCount === 0 ? 'ICE failed before a remote media track was emitted.' : 'ICE failed after media track attachment.');
       }
     };
     peer.onconnectionstatechange = publishViewerPeerState;
@@ -670,6 +731,7 @@ export function LiveSourceCard({
             try {
               markExplorerViewerPeerDebug({ offerSeenAt: Date.now(), stickyOfferSeen: true });
               await peerConnRef.current.setRemoteDescription(new RTCSessionDescription(signal.offer));
+              await flushQueuedDeviceIce();
             } catch (error) {
               setFailure('set_remote_description_failed', 'Live viewer failed to apply device offer.');
               markExplorerViewerPeerDebug({ failureReason: 'set_remote_description_failed', setRemoteDescriptionError: error instanceof Error ? error.message : String(error) });
@@ -711,20 +773,23 @@ export function LiveSourceCard({
           }
         }
         for (const candidate of signal.ice_from_device || []) {
-          const key = `${candidate.candidate}|${candidate.sdpMid || ''}|${candidate.sdpMLineIndex ?? ''}`;
-          if (deviceIceSeenRef.current.has(key)) continue;
-          deviceIceSeenRef.current.add(key);
-          try {
-            await peerConnRef.current.addIceCandidate(candidate);
-            markExplorerViewerPeerDebug({ deviceIceSeenCount: deviceIceSeenRef.current.size });
-          } catch (error) {
-            setPeerDiagnostic('ice_failed');
-            markExplorerLiveFlowDebug({
-              watchLiveSessionId: sessionId,
-              viewerId,
-              failureReason: 'ice_failed',
-              iceError: error instanceof Error ? error.message : String(error),
-            });
+          await applyDeviceIceCandidate(candidate, 'poll');
+        }
+        await publishIceCandidateDebug({ signalDeviceIceCount: (signal.ice_from_device || []).length });
+        const iceConnected = peer.connectionState === 'connected' || peer.iceConnectionState === 'connected' || peer.iceConnectionState === 'completed';
+        if (
+          !selectedCandidatePairTimeoutReported
+          && answerPostedRef.current
+          && deviceIceReceivedKeysRef.current.size > 0
+          && !iceConnected
+          && viewerActorCreatedAtRef.current
+          && Date.now() - viewerActorCreatedAtRef.current > 15000
+        ) {
+          const summary = await summarizeCandidatePairFromStats(peer);
+          if (!summary.selectedCandidatePair) {
+            selectedCandidatePairTimeoutReported = true;
+            setFailure('ice_exchange_failed', 'ICE candidate exchange did not select a candidate pair after answer confirmation.');
+            markExplorerViewerPeerDebug({ failureReason: 'ice_exchange_failed', selectedCandidatePair: null, iceFailureReason: 'selected-candidate-pair-timeout' });
           }
         }
       } catch (error) {
@@ -756,7 +821,10 @@ export function LiveSourceCard({
       if (statsPoll != null) window.clearInterval(statsPoll);
       peerConnRef.current?.close();
       peerConnRef.current = null;
-      deviceIceSeenRef.current.clear();
+      deviceIceReceivedKeysRef.current.clear();
+      appliedDeviceIceKeysRef.current.clear();
+      queuedDeviceIceRef.current = [];
+      deviceIceAddErrorsRef.current = [];
       answerPostedRef.current = false;
       viewerPollLoopCountRef.current = 0;
       viewerIcePublishedCountRef.current = 0;

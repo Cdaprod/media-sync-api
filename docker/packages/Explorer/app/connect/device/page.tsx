@@ -28,6 +28,7 @@ import {
   setBrowserRuntimeIdentity,
   stripNodeAuthQueryParams,
 } from '../../../src/lib/browserRuntimeIdentity';
+import { getIceCandidateKey, safeAddIceCandidate, summarizeCandidatePairFromStats } from '../../../src/live/iceCandidateUtils';
 // CSS import removed – now in layout.tsx
 
 const api = createApiClient('');
@@ -137,7 +138,10 @@ export default function ConnectDevicePage() {
   } = useLiveSession(api, nodeId);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const peerSessionIdRef = useRef<string | null>(null);
-  const viewerIceSeenRef = useRef<Set<string>>(new Set());
+  const viewerIceReceivedKeysRef = useRef<Set<string>>(new Set());
+  const appliedViewerIceKeysRef = useRef<Set<string>>(new Set());
+  const queuedViewerIceRef = useRef<RTCIceCandidateInit[]>([]);
+  const viewerIceAddErrorsRef = useRef<Array<Record<string, string>>>([]);
   const activeViewerIdRef = useRef<string>('viewer-broadcast');
   const signalPollTimerRef = useRef<number | null>(null);
   const publisherSignalPollLoopCountRef = useRef(0);
@@ -358,7 +362,10 @@ export default function ConnectDevicePage() {
       publisherSignalPollLoopCountRef.current = 0;
       deviceIcePublishedCountRef.current = 0;
       peerSessionIdRef.current = null;
-      viewerIceSeenRef.current.clear();
+      viewerIceReceivedKeysRef.current.clear();
+      appliedViewerIceKeysRef.current.clear();
+      queuedViewerIceRef.current = [];
+      viewerIceAddErrorsRef.current = [];
       activeViewerIdRef.current = 'viewer-broadcast';
       clearNodeHeartbeatTimer();
       if (viewerPollTimerRef.current != null) {
@@ -460,6 +467,60 @@ export default function ConnectDevicePage() {
     }
   };
 
+  const publishPublisherIceCandidateDebug = async (patch: Record<string, unknown> = {}) => {
+    let statsPatch: Record<string, unknown> = {};
+    if (peerConnectionRef.current) {
+      try {
+        statsPatch = await summarizeCandidatePairFromStats(peerConnectionRef.current);
+      } catch (error) {
+        statsPatch = { candidatePairStatsError: error instanceof Error ? error.message : String(error) };
+      }
+    }
+    markPublisherPeerDebug({
+      viewerAnswerSeen: Boolean(peerConnectionRef.current?.remoteDescription),
+      viewerAnswerApplied: publisherAnswerAppliedRef.current,
+      viewerIceReceivedCount: viewerIceReceivedKeysRef.current.size,
+      viewerIceAppliedCount: appliedViewerIceKeysRef.current.size,
+      viewerIceQueuedCount: queuedViewerIceRef.current.length,
+      viewerIceAddErrors: viewerIceAddErrorsRef.current,
+      deviceIcePublishedCount: deviceIcePublishedCountRef.current,
+      iceConnectionState: peerConnectionRef.current?.iceConnectionState ?? null,
+      connectionState: peerConnectionRef.current?.connectionState ?? null,
+      selectedCandidatePair: null,
+      localCandidateTypes: [],
+      remoteCandidateTypes: [],
+      ...statsPatch,
+      ...patch,
+    });
+  };
+
+  const applyViewerIceCandidate = async (candidate: RTCIceCandidateInit, source: 'poll' | 'flush') => {
+    const activePeer = peerConnectionRef.current;
+    if (!activePeer) return;
+    const key = getIceCandidateKey(candidate);
+    if (!key.trim() || appliedViewerIceKeysRef.current.has(key)) return;
+    if (!viewerIceReceivedKeysRef.current.has(key)) viewerIceReceivedKeysRef.current.add(key);
+    if (!activePeer.remoteDescription && !activePeer.currentRemoteDescription) {
+      if (!queuedViewerIceRef.current.some((queued) => getIceCandidateKey(queued) === key)) queuedViewerIceRef.current.push(candidate);
+      await publishPublisherIceCandidateDebug({ queuedViewerIceReason: 'remote-answer-not-ready', lastViewerIceSource: source });
+      return;
+    }
+    const result = await safeAddIceCandidate(activePeer, candidate, `publisher-viewer-ice-${source}`);
+    if (result.ok) {
+      appliedViewerIceKeysRef.current.add(key);
+    } else {
+      viewerIceAddErrorsRef.current = [...viewerIceAddErrorsRef.current.slice(-9), { key, name: result.errorName, message: result.errorMessage }];
+    }
+    await publishPublisherIceCandidateDebug({ lastViewerIceSource: source });
+  };
+
+  const flushQueuedViewerIce = async () => {
+    const queued = queuedViewerIceRef.current;
+    queuedViewerIceRef.current = [];
+    for (const candidate of queued) await applyViewerIceCandidate(candidate, 'flush');
+    await publishPublisherIceCandidateDebug({ flushedViewerIceCount: queued.length });
+  };
+
   const publishPeerOffer = async (sessionRecord: { session_id: string }, stream: MediaStream) => {
     const sessionId = sessionRecord.session_id;
     appendTrace(`peer:create ${sessionId}`);
@@ -475,7 +536,9 @@ export default function ConnectDevicePage() {
       liveVideoTrackCount,
       failureReason: null,
       deviceIcePublishedCount: deviceIcePublishedCountRef.current,
-      viewerIceSeenCount: viewerIceSeenRef.current.size,
+      viewerIceReceivedCount: viewerIceReceivedKeysRef.current.size,
+      viewerIceAppliedCount: appliedViewerIceKeysRef.current.size,
+      viewerIceQueuedCount: queuedViewerIceRef.current.length,
     });
     if (typeof window === 'undefined' || typeof RTCPeerConnection === 'undefined') {
       markBroadcastDebug({ lastPeerError: 'rtc_unavailable' });
@@ -521,7 +584,10 @@ export default function ConnectDevicePage() {
     const peer = new RTCPeerConnection();
     peerConnectionRef.current = peer;
     peerSessionIdRef.current = sessionId;
-    viewerIceSeenRef.current.clear();
+    viewerIceReceivedKeysRef.current.clear();
+    appliedViewerIceKeysRef.current.clear();
+    queuedViewerIceRef.current = [];
+    viewerIceAddErrorsRef.current = [];
     deviceIcePublishedCountRef.current = 0;
     activeViewerIdRef.current = 'viewer-broadcast';
     markPublisherPeerDebug({ peerCreatedAt, createdAt: peerCreatedAt, restartReason: 'session-owned-publisher-created', peerClosedBy: null, offerPublished: false, answerSeen: false, answerApplied: false, connectionState: peer.connectionState, iceConnectionState: peer.iceConnectionState, iceGatheringState: peer.iceGatheringState, signalingState: peer.signalingState });
@@ -531,7 +597,9 @@ export default function ConnectDevicePage() {
         iceConnectionState: peer.iceConnectionState,
         iceGatheringState: peer.iceGatheringState,
         connectionState: peer.connectionState,
-        viewerIceSeenCount: viewerIceSeenRef.current.size,
+        viewerIceReceivedCount: viewerIceReceivedKeysRef.current.size,
+      viewerIceAppliedCount: appliedViewerIceKeysRef.current.size,
+      viewerIceQueuedCount: queuedViewerIceRef.current.length,
         deviceIcePublishedCount: deviceIcePublishedCountRef.current,
       });
       if (peer.connectionState === 'connected' || peer.iceConnectionState === 'connected' || peer.iceConnectionState === 'completed') {
@@ -608,18 +676,16 @@ export default function ConnectDevicePage() {
           markPublisherPeerDebug({ answerSeenAt: Date.now(), answerSeen: true });
           await activePeer.setRemoteDescription(new RTCSessionDescription(signal.answer));
           publisherAnswerAppliedRef.current = true;
+          await flushQueuedViewerIce();
           appendTrace(`peer:answer-applied ${sessionId}`);
           setPeerStatus('answer_applied');
           setBroadcast((prev) => ({ ...prev, stage: 'waiting_for_answer', waitingForAnswer: false, updatedAt: Date.now() }));
           markPublisherPeerDebug({ answerAppliedAt: Date.now(), answerApplied: true, peerClosedBy: publisherPeerClosedByRef.current, signalingState: activePeer.signalingState });
         }
         for (const candidate of signal.ice_from_viewer || []) {
-          const key = `${candidate.candidate}|${candidate.sdpMid || ''}|${candidate.sdpMLineIndex ?? ''}`;
-          if (viewerIceSeenRef.current.has(key)) continue;
-          viewerIceSeenRef.current.add(key);
-          await activePeer.addIceCandidate(candidate);
-          markPublisherPeerDebug({ viewerIceSeenCount: viewerIceSeenRef.current.size });
+          await applyViewerIceCandidate(candidate, 'poll');
         }
+        await publishPublisherIceCandidateDebug({ signalViewerIceCount: (signal.ice_from_viewer || []).length });
       }).catch((error) => {
         markPublisherPeerDebug({ failureReason: 'signal_poll_failed', signalPollError: error instanceof Error ? error.message : String(error) });
       }).finally(() => { signalPollBusy = false; });
