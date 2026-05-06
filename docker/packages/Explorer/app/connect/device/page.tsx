@@ -148,6 +148,7 @@ export default function ConnectDevicePage() {
   const publisherPeerClosedByRef = useRef<string | null>(null);
   const nodeHeartbeatTimerRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
   const publisherBusyRef = useRef(false);
+  const publisherStatsTimerRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
   const activeBroadcastSessionRef = useRef<{ session_id: string } | null>(null);
   const viewerPeerRef = useRef<RTCPeerConnection | null>(null);
   const viewerPollTimerRef = useRef<number | null>(null);
@@ -347,6 +348,7 @@ export default function ConnectDevicePage() {
         window.clearInterval(signalPollTimerRef.current);
         signalPollTimerRef.current = null;
       }
+      clearPublisherStatsPoll();
       if (peerConnectionRef.current) {
         publisherPeerClosedByRef.current = 'component-unmount';
         markPublisherPeerDebug({ peerClosedBy: publisherPeerClosedByRef.current, restartReason: 'component-unmount' });
@@ -387,6 +389,77 @@ export default function ConnectDevicePage() {
     }
   };
 
+  const clearPublisherStatsPoll = () => {
+    if (publisherStatsTimerRef.current != null) {
+      window.clearInterval(publisherStatsTimerRef.current);
+      publisherStatsTimerRef.current = null;
+    }
+  };
+
+  const samplePublisherOutboundRtpStats = async (sessionId: string, stream: MediaStream) => {
+    const peer = peerConnectionRef.current;
+    if (!peer || peerSessionIdRef.current !== sessionId) return;
+    const localVideoTrack = stream.getVideoTracks()[0] || null;
+    let outboundPatch: Record<string, unknown> = {
+      outboundVideoBytesSent: 0,
+      outboundVideoPacketsSent: 0,
+      outboundVideoFramesEncoded: 0,
+      outboundVideoFrameWidth: 0,
+      outboundVideoFrameHeight: 0,
+    };
+    try {
+      const report = await peer.getStats();
+      report.forEach((entry) => {
+        const stat = entry as any;
+        if (stat.type !== 'outbound-rtp' || stat.kind !== 'video') return;
+        outboundPatch = {
+          outboundVideoBytesSent: stat.bytesSent ?? 0,
+          outboundVideoPacketsSent: stat.packetsSent ?? 0,
+          outboundVideoFramesEncoded: stat.framesEncoded ?? 0,
+          outboundVideoFrameWidth: stat.frameWidth ?? 0,
+          outboundVideoFrameHeight: stat.frameHeight ?? 0,
+          lastOutboundVideoStatsAt: Date.now(),
+        };
+      });
+    } catch (error) {
+      markPublisherPeerDebug({ outboundStatsError: error instanceof Error ? error.message : String(error) });
+    }
+    const bytesSent = Number(outboundPatch.outboundVideoBytesSent || 0);
+    const connectedOrAnswered = publisherAnswerAppliedRef.current || peer.connectionState === 'connected' || peer.iceConnectionState === 'connected' || peer.iceConnectionState === 'completed';
+    const publisherMediaFailureClass = !localVideoTrack || localVideoTrack.readyState !== 'live' || localVideoTrack.muted
+      ? 'local_track_not_live'
+      : bytesSent > 0
+        ? 'outbound_rtp_flowing'
+        : connectedOrAnswered
+          ? 'connected_but_no_outbound_rtp'
+          : null;
+    markPublisherPeerDebug({
+      sessionId,
+      peerConnectionState: peer.connectionState,
+      connectionState: peer.connectionState,
+      iceConnectionState: peer.iceConnectionState,
+      signalingState: peer.signalingState,
+      localTrackCount: stream.getTracks().filter((track) => track.readyState === 'live').length,
+      localVideoTrackReadyState: localVideoTrack?.readyState ?? null,
+      localVideoTrackMuted: localVideoTrack?.muted ?? null,
+      localVideoTrackEnabled: localVideoTrack?.enabled ?? null,
+      ...outboundPatch,
+      publisherMediaFailureClass,
+    });
+  };
+
+  const reconcilePublisherTracks = async (peer: RTCPeerConnection, stream: MediaStream) => {
+    const senders = peer.getSenders();
+    for (const track of stream.getTracks().filter((item) => item.readyState === 'live')) {
+      const existingSender = senders.find((sender) => sender.track?.kind === track.kind);
+      if (existingSender) {
+        if (existingSender.track?.id !== track.id) await existingSender.replaceTrack(track);
+      } else {
+        peer.addTrack(track, stream);
+      }
+    }
+  };
+
   const publishPeerOffer = async (sessionRecord: { session_id: string }, stream: MediaStream) => {
     const sessionId = sessionRecord.session_id;
     appendTrace(`peer:create ${sessionId}`);
@@ -418,12 +491,15 @@ export default function ConnectDevicePage() {
       return;
     }
     if (peerConnectionRef.current && peerSessionIdRef.current === sessionId && publisherAnswerAppliedRef.current) {
+      await reconcilePublisherTracks(peerConnectionRef.current, stream);
+      void samplePublisherOutboundRtpStats(sessionId, stream);
       markPublisherPeerDebug({ restartReason: 'publisher-already-answer-applied', peerClosedBy: null, answerApplied: true });
       appendTrace(`peer:reuse-answer-applied ${sessionId}`);
       setPeerStatus(peerConnectionRef.current.connectionState || 'answer_applied');
       return;
     }
     clearPublisherSignalPoll();
+    clearPublisherStatsPoll();
     if (peerConnectionRef.current && peerSessionIdRef.current !== sessionId) {
       publisherActorTeardownCountRef.current += 1;
       publisherPeerClosedByRef.current = 'session_id_changed';
@@ -475,7 +551,7 @@ export default function ConnectDevicePage() {
     peer.oniceconnectionstatechange = publishStateDebug;
     peer.onicegatheringstatechange = publishStateDebug;
     peer.onsignalingstatechange = publishStateDebug;
-    stream.getTracks().filter((track) => track.readyState === 'live').forEach((track) => peer.addTrack(track, stream));
+    await reconcilePublisherTracks(peer, stream);
     peer.onicecandidate = (event) => {
       if (!event.candidate) return;
       deviceIcePublishedCountRef.current += 1;
@@ -550,6 +626,10 @@ export default function ConnectDevicePage() {
     };
     pollSignal();
     signalPollTimerRef.current = window.setInterval(pollSignal, 1000);
+    void samplePublisherOutboundRtpStats(sessionId, stream);
+    publisherStatsTimerRef.current = window.setInterval(() => {
+      void samplePublisherOutboundRtpStats(sessionId, stream);
+    }, 1000);
   };
 
 
@@ -759,6 +839,7 @@ export default function ConnectDevicePage() {
 
   const handleStopBroadcast = () => {
     clearPublisherSignalPoll();
+    clearPublisherStatsPoll();
     if (peerConnectionRef.current) {
       publisherPeerClosedByRef.current = 'explicit-stop-broadcast';
       markPublisherPeerDebug({ peerClosedBy: publisherPeerClosedByRef.current, restartReason: 'explicit-stop-broadcast' });

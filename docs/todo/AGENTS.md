@@ -1,3 +1,10 @@
+## 2026-05-06 — Safari WebRTC playback boundary and RTP diagnostics (new)
+- [x] Added Explorer viewer inbound RTP stats in `window.__explorerViewerPeerDebug` so real Safari runs can distinguish attached tracks with no RTP from RTP with no decoded/rendered frames.
+- [x] Added Connect Device publisher outbound RTP stats in `window.__connectDevicePublisherPeerDebug` with publisher media classification for no outbound RTP, flowing RTP, and non-live local camera tracks.
+- [x] Made Safari/iOS `AbortError` playback rejection retryable: signaling stays `answer_confirmed`, media stays `track_attached`, ICE stays connected, the remote stream remains attached, and the UI prompts `Tap to play live stream`.
+- [x] Stabilized remote `MediaStream` attachment with Safari-safe muted/autoplay/playsinline attributes, stream-id reuse checks before `srcObject` reassignment, no MediaStream `load()`, and `lastSrcObjectAssignedAt` diagnostics.
+- [ ] Next validation item: inspect `__explorerViewerPeerDebug` and `__connectDevicePublisherPeerDebug` to classify `track_attached_but_no_rtp`, `rtp_receiving_but_no_frames_decoded`, `frames_decoded_but_video_play_rejected`, `video_play_interrupted_by_srcobject_reset`, or `frames_rendering`.
+
 ## 2026-05-06 — WebRTC media-plane boundary hardening after answer confirmation (new)
 - [x] Split Explorer viewer peer truth into signaling/media/playback/ICE lanes so answer confirmation no longer collapses later media failures into a generic publisher-failed label.
 - [x] Hardened remote track attachment with stream-id/live-track diagnostics, Safari-safe video attributes, exact play rejection name/message telemetry, and a tap-to-play retry path that keeps the stream attached after playback rejection.

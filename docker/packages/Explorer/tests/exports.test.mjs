@@ -4173,6 +4173,63 @@ test('LiveSourceCard viewer actor is keyed and does not regress to waiting after
   assert.ok(content.includes("'answer confirmed, waiting for media track'"));
 });
 
+
+test('Safari WebRTC playback boundary preserves srcObject and samples RTP stats', () => {
+  const cardPath = path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx');
+  const devicePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const card = fs.readFileSync(cardPath, 'utf8');
+  const device = fs.readFileSync(devicePath, 'utf8');
+
+  assert.ok(card.includes('attachRemoteStreamToVideo'));
+  assert.ok(card.includes('existingStreamId !== stream.id'));
+  assert.ok(card.includes("video.setAttribute('playsinline', 'true')"));
+  assert.ok(card.includes('lastSrcObjectAssignedAt'));
+  assert.ok(!card.includes('.load()'));
+  assert.ok(card.includes('activePeer.getStats()'));
+  for (const field of [
+    'inboundVideoBytesReceived',
+    'inboundVideoPacketsReceived',
+    'inboundVideoPacketsLost',
+    'inboundVideoFramesDecoded',
+    'inboundVideoFramesReceived',
+    'inboundVideoFrameWidth',
+    'inboundVideoFrameHeight',
+    'inboundVideoFramesPerSecond',
+    'lastInboundVideoStatsAt',
+    'videoSrcObjectStreamId',
+    'remoteVideoTrackReadyState',
+    'remoteVideoTrackMuted',
+    'remoteVideoTrackEnabled',
+    'mediaFailureClass',
+  ]) {
+    assert.ok(card.includes(field), `LiveSourceCard missing ${field}`);
+  }
+  for (const marker of [
+    'track_attached_but_no_rtp',
+    'rtp_receiving_but_no_frames_decoded',
+    'frames_decoded_but_video_play_rejected',
+    'video_play_interrupted_by_srcobject_reset',
+    'frames_rendering',
+  ]) {
+    assert.ok(card.includes(marker), `LiveSourceCard missing ${marker}`);
+  }
+  assert.ok(card.includes('video_playback_interrupted'));
+  assert.ok(card.includes('video_playback_blocked'));
+  assert.ok(card.includes('Tap to play live stream'));
+  assert.ok(card.includes('Safari interrupted playback, tap to retry'));
+  assert.ok(!card.includes('publisher_failed'));
+
+  assert.ok(device.includes('samplePublisherOutboundRtpStats'));
+  assert.ok(device.includes('outboundVideoBytesSent'));
+  assert.ok(device.includes('outboundVideoFramesEncoded'));
+  assert.ok(device.includes('publisherMediaFailureClass'));
+  assert.ok(device.includes('connected_but_no_outbound_rtp'));
+  assert.ok(device.includes('outbound_rtp_flowing'));
+  assert.ok(device.includes('local_track_not_live'));
+  assert.ok(device.includes('replaceTrack(track)'));
+  assert.ok(!device.includes('publisher_failed'));
+});
+
 test('device publisher peer is session-owned and republish is explicit', () => {
   const devicePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
   const content = fs.readFileSync(devicePath, 'utf8');

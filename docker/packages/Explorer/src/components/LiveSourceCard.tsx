@@ -57,9 +57,43 @@ type ExplorerLiveFailureReason = typeof EXPLORER_LIVE_FAILURE_REASONS[number];
 
 type ViewerSignalingStatus = 'idle' | 'initializing' | 'waiting_for_offer' | 'offer_seen' | 'answer_publishing' | 'answer_published' | 'answer_confirmed' | 'failed' | 'stale_session_not_found';
 type ViewerMediaStatus = 'idle' | 'waiting_for_track' | 'remote_track_not_emitted' | 'track_attached' | 'video_src_object_not_set' | 'video_has_no_live_tracks';
-type ViewerPlaybackStatus = 'idle' | 'waiting_for_play' | 'playing' | 'video_playback_failed';
+type ViewerPlaybackStatus = 'idle' | 'waiting_for_play' | 'playing' | 'video_playback_failed' | 'video_playback_interrupted' | 'video_playback_blocked';
 type ViewerIceStatus = 'idle' | 'checking' | 'connected' | 'disconnected' | 'ice_exchange_failed' | 'peer_ice_failed_before_track';
 type ViewerPeerStatus = ViewerSignalingStatus | ViewerMediaStatus | ViewerPlaybackStatus | 'failed' | 'connected' | 'answering';
+
+type ViewerMediaFailureClass =
+  | 'track_attached_but_no_rtp'
+  | 'rtp_receiving_but_no_frames_decoded'
+  | 'frames_decoded_but_video_play_rejected'
+  | 'video_play_interrupted_by_srcobject_reset'
+  | 'frames_rendering'
+  | 'playback_started_waiting_for_dimensions'
+  | null;
+
+function attachRemoteStreamToVideo(video: HTMLVideoElement, stream: MediaStream, reason: string): boolean {
+  video.muted = true;
+  video.autoplay = true;
+  video.playsInline = true;
+  video.setAttribute('playsinline', 'true');
+  const existing = video.srcObject;
+  const existingStreamId = existing instanceof MediaStream ? existing.id : null;
+  const newlyAssigned = existingStreamId !== stream.id;
+  const assignedAt = newlyAssigned ? Date.now() : null;
+  if (newlyAssigned) {
+    video.srcObject = stream;
+  }
+  markExplorerViewerPeerDebug({
+    attachRemoteStreamReason: reason,
+    videoSrcObjectSet: video.srcObject === stream || existingStreamId === stream.id,
+    videoSrcObjectStreamId: stream.id,
+    ...(assignedAt ? { lastSrcObjectAssignedAt: assignedAt } : {}),
+    srcObjectReusedByStreamId: !newlyAssigned,
+    videoMuted: video.muted,
+    videoPlaysInline: video.playsInline,
+    videoAutoplay: video.autoplay,
+  });
+  return newlyAssigned;
+}
 
 function markExplorerLiveFlowDebug(patch: Record<string, unknown>) {
   if (typeof window === 'undefined') return;
@@ -143,6 +177,7 @@ export function LiveSourceCard({
   const [playbackStatus, setPlaybackStatus] = useState<ViewerPlaybackStatus>('idle');
   const [iceStatus, setIceStatus] = useState<ViewerIceStatus>('idle');
   const [peerDiagnostic, setPeerDiagnostic] = useState<string | null>(null);
+  const [mediaFailureClass, setMediaFailureClass] = useState<ViewerMediaFailureClass>(null);
   const [showTapToPlay, setShowTapToPlay] = useState(false);
   const [peerRetryToken, setPeerRetryToken] = useState(0);
   const viewerActorCreatedAtRef = useRef<number | null>(null);
@@ -152,6 +187,9 @@ export function LiveSourceCard({
   const answerPostedRef = useRef(false);
   const viewerPollLoopCountRef = useRef(0);
   const viewerIcePublishedCountRef = useRef(0);
+  const lastSrcObjectAssignedAtRef = useRef<number | null>(null);
+  const remoteTrackAttachedAtRef = useRef<number | null>(null);
+  const latestInboundVideoStatsRef = useRef<Record<string, unknown>>({});
   const sessionRef = useRef(session);
   sessionRef.current = session;
   const onRemoteStreamRef = useRef(onRemoteStream);
@@ -196,6 +234,7 @@ export function LiveSourceCard({
     let disposed = false;
     let poll: number | null = null;
     let noTrackTimer: number | null = null;
+    let statsPoll: number | null = null;
     const setFailure = (reason: ExplorerLiveFailureReason, message?: string) => {
       const stale = reason === 'stale_session_not_found';
       const mediaOnly = reason === 'video_playback_failed'
@@ -227,6 +266,7 @@ export function LiveSourceCard({
     const dropStaleSession = (endpoint: string) => {
       disposed = true;
       if (poll != null) window.clearInterval(poll);
+      if (statsPoll != null) window.clearInterval(statsPoll);
       if (noTrackTimer != null) window.clearTimeout(noTrackTimer);
       peerConnRef.current?.close();
       peerConnRef.current = null;
@@ -237,6 +277,9 @@ export function LiveSourceCard({
       viewerActorTeardownCountRef.current += 1;
       markExplorerViewerPeerDebug({ activePeerCount: 0, teardownCount: viewerActorTeardownCountRef.current, restartReason: 'actor-cleanup' });
       if (peerVideoRef.current) peerVideoRef.current.srcObject = null;
+      lastSrcObjectAssignedAtRef.current = null;
+      remoteTrackAttachedAtRef.current = null;
+      latestInboundVideoStatsRef.current = {};
       StreamHub.delete(sessionId);
       setPeerStream(null);
       setFailure('stale_session_not_found', 'Live session no longer exists. Refreshing live sessions.');
@@ -327,10 +370,85 @@ export function LiveSourceCard({
       });
     }, 10000);
 
+    const classifyMediaFailure = (patch: Record<string, unknown> = {}): ViewerMediaFailureClass => {
+      const video = peerVideoRef.current;
+      const stats = { ...latestInboundVideoStatsRef.current, ...patch } as Record<string, unknown>;
+      const bytes = Number(stats.inboundVideoBytesReceived || 0);
+      const framesDecoded = Number(stats.inboundVideoFramesDecoded || 0);
+      const videoWidth = video?.videoWidth || 0;
+      const videoHeight = video?.videoHeight || 0;
+      const rejectedName = typeof stats.videoPlayRejectedName === 'string' ? stats.videoPlayRejectedName : null;
+      const elapsedSinceTrack = remoteTrackAttachedAtRef.current ? Date.now() - remoteTrackAttachedAtRef.current : 0;
+      const elapsedSinceSrcObject = lastSrcObjectAssignedAtRef.current ? Date.now() - lastSrcObjectAssignedAtRef.current : Number.POSITIVE_INFINITY;
+      let next: ViewerMediaFailureClass = mediaFailureClass;
+      if (videoWidth > 0 && videoHeight > 0) next = 'frames_rendering';
+      else if (rejectedName === 'AbortError' && elapsedSinceSrcObject <= 1000) next = 'video_play_interrupted_by_srcobject_reset';
+      else if (framesDecoded > 0 && rejectedName) next = 'frames_decoded_but_video_play_rejected';
+      else if (bytes > 0 && framesDecoded <= 0 && elapsedSinceTrack >= 3000) next = 'rtp_receiving_but_no_frames_decoded';
+      else if (remoteTrackAttachedAtRef.current && bytes <= 0 && elapsedSinceTrack >= 3000) next = 'track_attached_but_no_rtp';
+      if (next !== mediaFailureClass) setMediaFailureClass(next);
+      markExplorerViewerPeerDebug({ mediaFailureClass: next, ...stats });
+      return next;
+    };
+
+    const sampleInboundRtpStats = async () => {
+      if (disposed || !peerConnRef.current) return;
+      const activePeer = peerConnRef.current;
+      const video = peerVideoRef.current;
+      const stream = peerStream || (video?.srcObject instanceof MediaStream ? video.srcObject : null);
+      const remoteTracks = stream?.getTracks() || activePeer.getReceivers().map((receiver) => receiver.track).filter(Boolean) as MediaStreamTrack[];
+      const remoteVideoTrack = remoteTracks.find((track) => track.kind === 'video') || null;
+      let inboundPatch: Record<string, unknown> = {};
+      try {
+        const report = await activePeer.getStats();
+        report.forEach((entry) => {
+          const stat = entry as any;
+          if (stat.type !== 'inbound-rtp' || stat.kind !== 'video') return;
+          inboundPatch = {
+            inboundVideoBytesReceived: stat.bytesReceived ?? 0,
+            inboundVideoPacketsReceived: stat.packetsReceived ?? 0,
+            inboundVideoPacketsLost: stat.packetsLost ?? 0,
+            inboundVideoFramesDecoded: stat.framesDecoded ?? 0,
+            inboundVideoFramesReceived: stat.framesReceived ?? 0,
+            inboundVideoFrameWidth: stat.frameWidth ?? 0,
+            inboundVideoFrameHeight: stat.frameHeight ?? 0,
+            inboundVideoFramesPerSecond: stat.framesPerSecond ?? 0,
+            lastInboundVideoStatsAt: Date.now(),
+          };
+        });
+      } catch (error) {
+        markExplorerViewerPeerDebug({ inboundStatsError: error instanceof Error ? error.message : String(error) });
+      }
+      latestInboundVideoStatsRef.current = { ...latestInboundVideoStatsRef.current, ...inboundPatch };
+      classifyMediaFailure(inboundPatch);
+      markExplorerViewerPeerDebug({
+        sessionId,
+        viewerId,
+        signalingState: activePeer.signalingState,
+        iceConnectionState: activePeer.iceConnectionState,
+        connectionState: activePeer.connectionState,
+        remoteTrackCount: remoteTracks.length,
+        remoteVideoTrackCount: remoteTracks.filter((track) => track.kind === 'video').length,
+        remoteAudioTrackCount: remoteTracks.filter((track) => track.kind === 'audio').length,
+        remoteVideoTrackReadyState: remoteVideoTrack?.readyState ?? null,
+        remoteVideoTrackMuted: remoteVideoTrack?.muted ?? null,
+        remoteVideoTrackEnabled: remoteVideoTrack?.enabled ?? null,
+        videoSrcObjectSet: video?.srcObject instanceof MediaStream,
+        videoSrcObjectStreamId: video?.srcObject instanceof MediaStream ? video.srcObject.id : null,
+        videoReadyState: video?.readyState ?? null,
+        videoPaused: video?.paused ?? null,
+        videoMuted: video?.muted ?? null,
+        videoPlaysInline: video?.playsInline ?? null,
+        videoAutoplay: video?.autoplay ?? null,
+        videoWidth: video?.videoWidth ?? 0,
+        videoHeight: video?.videoHeight ?? 0,
+        lastSrcObjectAssignedAt: lastSrcObjectAssignedAtRef.current,
+        ...latestInboundVideoStatsRef.current,
+      });
+    };
+
     const attemptPlayAttachedStream = async (video: HTMLVideoElement, stream: MediaStream, source: 'ontrack' | 'tap') => {
-      video.muted = true;
-      video.autoplay = true;
-      video.playsInline = true;
+      attachRemoteStreamToVideo(video, stream, `play-${source}`);
       const liveVideoTrackCount = stream.getVideoTracks().filter((track) => track.readyState === 'live').length;
       const readyStateBeforePlay = video.readyState;
       markExplorerViewerPeerDebug({
@@ -351,6 +469,8 @@ export function LiveSourceCard({
       try {
         await video.play();
         if (disposed) return;
+        const nextFailureClass: ViewerMediaFailureClass = video.videoWidth > 0 && video.videoHeight > 0 ? 'frames_rendering' : 'playback_started_waiting_for_dimensions';
+        setMediaFailureClass(nextFailureClass);
         setShowTapToPlay(false);
         publishViewerState('playing', 'remote-track-playing', { media: 'track_attached', playback: 'playing' });
         markExplorerLiveFlowDebug({
@@ -365,16 +485,18 @@ export function LiveSourceCard({
           failureReason: null,
           videoPlayingAt: Date.now(),
         });
-        markExplorerViewerPeerDebug({ videoPlayResolved: true, videoPlayResolvedAt: Date.now(), failureReason: null });
+        markExplorerViewerPeerDebug({ videoPlayResolved: true, videoPlayResolvedAt: Date.now(), failureReason: null, mediaFailureClass: nextFailureClass, videoWidth: video.videoWidth, videoHeight: video.videoHeight });
       } catch (error) {
         if (disposed) return;
         const errorName = error instanceof DOMException ? error.name : (error instanceof Error ? error.name : 'UnknownError');
         const errorMessage = error instanceof Error ? error.message : String(error);
+        const nextPlayback: ViewerPlaybackStatus = errorName === 'AbortError' ? 'video_playback_interrupted' : 'video_playback_blocked';
+        const nextFailureClass = classifyMediaFailure({ videoPlayRejectedName: errorName, videoPlayRejectedMessage: errorMessage });
         setShowTapToPlay(true);
-        setPlaybackStatus('video_playback_failed');
+        setPlaybackStatus(nextPlayback);
         setPeerDiagnostic('video_playback_failed');
-        setPeerError(`Live stream is attached but playback was blocked: ${errorName}`);
-        publishViewerState('track_attached', 'video_playback_failed', { media: 'track_attached', playback: 'video_playback_failed' });
+        setPeerError(errorName === 'AbortError' ? null : `Live stream is attached but playback was blocked: ${errorName}`);
+        publishViewerState('track_attached', 'video_playback_failed', { media: 'track_attached', playback: nextPlayback });
         markExplorerViewerPeerDebug({
           failureReason: 'video_playback_failed',
           videoPlayResolved: false,
@@ -383,13 +505,14 @@ export function LiveSourceCard({
           videoReadyStateAfterPlayRejection: video.readyState,
           videoPausedAfterPlayRejection: video.paused,
           videoSrcObjectSet: video.srcObject === stream,
+          mediaFailureClass: nextFailureClass,
         });
         markExplorerLiveFlowDebug({
           watchLiveSessionId: sessionId,
           viewerId,
           viewerStatus: 'track_attached',
           mediaStatus: 'track_attached',
-          playbackStatus: 'video_playback_failed',
+          playbackStatus: nextPlayback,
           remoteTrackCount,
           videoSrcObjectSet: true,
           videoPlayResolved: false,
@@ -415,10 +538,10 @@ export function LiveSourceCard({
       let videoSrcObjectSet = false;
       const video = peerVideoRef.current;
       if (video) {
-        video.muted = true;
-        video.autoplay = true;
-        video.playsInline = true;
-        video.srcObject = stream;
+        const assigned = attachRemoteStreamToVideo(video, stream, 'ontrack');
+        if (assigned) lastSrcObjectAssignedAtRef.current = Date.now();
+        remoteTrackAttachedAtRef.current = Date.now();
+        setMediaFailureClass(null);
         videoSrcObjectSet = true;
         setPeerStatus('track_attached');
         publishViewerState('track_attached', 'track_attached', { media: 'track_attached', playback: 'waiting_for_play' });
@@ -428,6 +551,7 @@ export function LiveSourceCard({
           remoteTrackCount,
           liveVideoTrackCount,
           videoReadyStateAfterSrcObject: video.readyState,
+          lastSrcObjectAssignedAt: lastSrcObjectAssignedAtRef.current,
           videoPausedAfterSrcObject: video.paused,
           videoLoadedMetadataAt: null,
           videoCanPlayAt: null,
@@ -452,7 +576,8 @@ export function LiveSourceCard({
         mediaStatus: videoSrcObjectSet ? 'track_attached' : 'video_src_object_not_set',
         failureReason: null,
       });
-      markExplorerViewerPeerDebug({ remoteTrackCount, remoteStreamId: streamId, liveVideoTrackCount, videoSrcObjectSet, failureReason: null });
+      markExplorerViewerPeerDebug({ remoteTrackCount, remoteStreamId: streamId, liveVideoTrackCount, videoSrcObjectSet, failureReason: null, mediaFailureClass: null });
+      void sampleInboundRtpStats();
       onRemoteStreamRef.current?.(sessionRef.current, stream);
     };
     const publishViewerPeerState = () => {
@@ -620,11 +745,15 @@ export function LiveSourceCard({
     poll = window.setInterval(() => {
       void pollSignal();
     }, 1000);
+    statsPoll = window.setInterval(() => {
+      if (lastStableStateRef.current === 'answer_confirmed' || remoteTrackAttachedAtRef.current) void sampleInboundRtpStats();
+    }, 1000);
 
     return () => {
       disposed = true;
       if (noTrackTimer != null) window.clearTimeout(noTrackTimer);
       if (poll != null) window.clearInterval(poll);
+      if (statsPoll != null) window.clearInterval(statsPoll);
       peerConnRef.current?.close();
       peerConnRef.current = null;
       deviceIceSeenRef.current.clear();
@@ -634,6 +763,9 @@ export function LiveSourceCard({
       viewerActorTeardownCountRef.current += 1;
       markExplorerViewerPeerDebug({ activePeerCount: 0, teardownCount: viewerActorTeardownCountRef.current, restartReason: 'actor-cleanup' });
       if (peerVideoRef.current) peerVideoRef.current.srcObject = null;
+      lastSrcObjectAssignedAtRef.current = null;
+      remoteTrackAttachedAtRef.current = null;
+      latestInboundVideoStatsRef.current = {};
       StreamHub.delete(sessionId);
       setPeerStream(null);
       setPeerDiagnostic(null);
@@ -641,6 +773,7 @@ export function LiveSourceCard({
       setSignalingStatus('idle');
       setMediaStatus('idle');
       setPlaybackStatus('idle');
+      setMediaFailureClass(null);
       setIceStatus('idle');
       setPeerStatus('idle');
     };
@@ -653,9 +786,14 @@ export function LiveSourceCard({
         : mediaStatus === 'remote_track_not_emitted' ? 'remote track not emitted'
           : iceStatus === 'peer_ice_failed_before_track' ? 'ICE failed before media track'
             : iceStatus === 'ice_exchange_failed' ? 'ICE exchange failed'
-              : playbackStatus === 'video_playback_failed' ? 'Tap to play live stream'
-                : playbackStatus === 'playing' ? 'playing'
-                  : mediaStatus === 'track_attached' ? 'media track attached, waiting for playback'
+              : mediaFailureClass === 'track_attached_but_no_rtp' ? 'track attached, waiting for RTP'
+                : mediaFailureClass === 'rtp_receiving_but_no_frames_decoded' ? 'RTP receiving, waiting for decoded frames'
+                  : mediaFailureClass === 'frames_decoded_but_video_play_rejected' ? 'decoded frames available, tap to play'
+                    : mediaFailureClass === 'video_play_interrupted_by_srcobject_reset' ? 'Safari interrupted playback, tap to retry'
+                      : mediaFailureClass === 'frames_rendering' ? 'live video rendering'
+                        : playbackStatus === 'video_playback_failed' || playbackStatus === 'video_playback_interrupted' || playbackStatus === 'video_playback_blocked' ? 'Tap to play live stream'
+                          : playbackStatus === 'playing' ? 'playing'
+                            : mediaStatus === 'track_attached' ? 'track attached, waiting for RTP'
                     : signalingStatus === 'answer_confirmed' ? 'answer confirmed, waiting for media track'
                       : signalingStatus === 'waiting_for_offer' ? 'waiting for offer'
                         : signalHasOffer && !signalHasAnswer ? 'offer published, waiting for viewer answer'
@@ -790,14 +928,23 @@ export function LiveSourceCard({
                 onClick={() => {
                   const video = peerVideoRef.current;
                   const stream = peerStream;
-                  if (video && stream) void video.play().then(() => {
-                    setShowTapToPlay(false);
-                    publishViewerState('playing', 'remote-track-playing', { playback: 'playing', media: 'track_attached' });
-                    markExplorerViewerPeerDebug({ videoPlayResolved: true, playbackAttemptSource: 'tap' });
-                  }).catch((error) => {
-                    const errorName = error instanceof DOMException ? error.name : (error instanceof Error ? error.name : 'UnknownError');
-                    markExplorerViewerPeerDebug({ videoPlayResolved: false, playbackAttemptSource: 'tap', videoPlayRejectedName: errorName, videoPlayRejectedMessage: error instanceof Error ? error.message : String(error) });
-                  });
+                  if (video && stream) {
+                    attachRemoteStreamToVideo(video, stream, 'tap-retry');
+                    void video.play().then(() => {
+                      const nextFailureClass: ViewerMediaFailureClass = video.videoWidth > 0 && video.videoHeight > 0 ? 'frames_rendering' : 'playback_started_waiting_for_dimensions';
+                      setMediaFailureClass(nextFailureClass);
+                      setShowTapToPlay(false);
+                      publishViewerState('playing', 'remote-track-playing', { playback: 'playing', media: 'track_attached' });
+                      markExplorerViewerPeerDebug({ videoPlayResolved: true, playbackAttemptSource: 'tap', mediaFailureClass: nextFailureClass, videoWidth: video.videoWidth, videoHeight: video.videoHeight });
+                    }).catch((error) => {
+                      const errorName = error instanceof DOMException ? error.name : (error instanceof Error ? error.name : 'UnknownError');
+                      const errorMessage = error instanceof Error ? error.message : String(error);
+                      setShowTapToPlay(true);
+                      setPeerDiagnostic('video_playback_failed');
+                      setPlaybackStatus(errorName === 'AbortError' ? 'video_playback_interrupted' : 'video_playback_blocked');
+                      markExplorerViewerPeerDebug({ videoPlayResolved: false, playbackAttemptSource: 'tap', videoPlayRejectedName: errorName, videoPlayRejectedMessage: errorMessage, mediaFailureClass: errorName === 'AbortError' ? 'video_play_interrupted_by_srcobject_reset' : mediaFailureClass });
+                    });
+                  }
                 }}
               >
                 Tap to play live stream
