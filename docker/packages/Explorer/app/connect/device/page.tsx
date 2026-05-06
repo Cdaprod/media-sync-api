@@ -144,6 +144,8 @@ export default function ConnectDevicePage() {
   const deviceIcePublishedCountRef = useRef(0);
   const publisherActorCreatedAtRef = useRef<number | null>(null);
   const publisherActorTeardownCountRef = useRef(0);
+  const publisherAnswerAppliedRef = useRef(false);
+  const publisherPeerClosedByRef = useRef<string | null>(null);
   const nodeHeartbeatTimerRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
   const publisherBusyRef = useRef(false);
   const activeBroadcastSessionRef = useRef<{ session_id: string } | null>(null);
@@ -198,6 +200,7 @@ export default function ConnectDevicePage() {
       sourceKind: 'camera',
       pollingLoopCount: publisherSignalPollLoopCountRef.current,
       activePeerCount: peerConnectionRef.current ? 1 : 0,
+      peerClosedBy: publisherPeerClosedByRef.current,
       ...patch,
       lastUpdatedAt: Date.now(),
     };
@@ -344,7 +347,11 @@ export default function ConnectDevicePage() {
         window.clearInterval(signalPollTimerRef.current);
         signalPollTimerRef.current = null;
       }
-      peerConnectionRef.current?.close();
+      if (peerConnectionRef.current) {
+        publisherPeerClosedByRef.current = 'component-unmount';
+        markPublisherPeerDebug({ peerClosedBy: publisherPeerClosedByRef.current, restartReason: 'component-unmount' });
+        peerConnectionRef.current.close();
+      }
       peerConnectionRef.current = null;
       publisherSignalPollLoopCountRef.current = 0;
       deviceIcePublishedCountRef.current = 0;
@@ -410,27 +417,38 @@ export default function ConnectDevicePage() {
       setBroadcast((prev) => ({ ...prev, stage: 'failed', waitingForAnswer: false, error: makeBroadcastFailure('missing_media_stream', 'no_video_tracks'), updatedAt: Date.now() }));
       return;
     }
+    if (peerConnectionRef.current && peerSessionIdRef.current === sessionId && publisherAnswerAppliedRef.current) {
+      markPublisherPeerDebug({ restartReason: 'publisher-already-answer-applied', peerClosedBy: null, answerApplied: true });
+      appendTrace(`peer:reuse-answer-applied ${sessionId}`);
+      setPeerStatus(peerConnectionRef.current.connectionState || 'answer_applied');
+      return;
+    }
     clearPublisherSignalPoll();
     if (peerConnectionRef.current && peerSessionIdRef.current !== sessionId) {
       publisherActorTeardownCountRef.current += 1;
-      markPublisherPeerDebug({ restartReason: 'session_id_changed', teardownCount: publisherActorTeardownCountRef.current });
+      publisherPeerClosedByRef.current = 'session_id_changed';
+      markPublisherPeerDebug({ restartReason: 'session_id_changed', peerClosedBy: publisherPeerClosedByRef.current, teardownCount: publisherActorTeardownCountRef.current });
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
+      publisherAnswerAppliedRef.current = false;
     }
     if (peerConnectionRef.current && peerSessionIdRef.current === sessionId) {
-      markPublisherPeerDebug({ restartReason: 'republish-current-session', offerPublished: true });
+      publisherPeerClosedByRef.current = 'explicit-republish-before-answer';
+      markPublisherPeerDebug({ restartReason: 'republish-current-session-before-answer', peerClosedBy: publisherPeerClosedByRef.current, offerPublished: true });
       peerConnectionRef.current.close();
       publisherActorTeardownCountRef.current += 1;
+      publisherAnswerAppliedRef.current = false;
     }
     const peerCreatedAt = Date.now();
     publisherActorCreatedAtRef.current = peerCreatedAt;
+    publisherPeerClosedByRef.current = null;
     const peer = new RTCPeerConnection();
     peerConnectionRef.current = peer;
     peerSessionIdRef.current = sessionId;
     viewerIceSeenRef.current.clear();
     deviceIcePublishedCountRef.current = 0;
     activeViewerIdRef.current = 'viewer-broadcast';
-    markPublisherPeerDebug({ peerCreatedAt, createdAt: peerCreatedAt, restartReason: 'session-owned-publisher-created', offerPublished: false, answerSeen: false, answerApplied: false, connectionState: peer.connectionState, iceConnectionState: peer.iceConnectionState, iceGatheringState: peer.iceGatheringState, signalingState: peer.signalingState });
+    markPublisherPeerDebug({ peerCreatedAt, createdAt: peerCreatedAt, restartReason: 'session-owned-publisher-created', peerClosedBy: null, offerPublished: false, answerSeen: false, answerApplied: false, connectionState: peer.connectionState, iceConnectionState: peer.iceConnectionState, iceGatheringState: peer.iceGatheringState, signalingState: peer.signalingState });
     const publishStateDebug = () => {
       markPublisherPeerDebug({
         signalingState: peer.signalingState,
@@ -445,8 +463,8 @@ export default function ConnectDevicePage() {
         setBroadcast((prev) => ({ ...prev, stage: 'connected', waitingForAnswer: false, updatedAt: Date.now() }));
       }
       if (peer.connectionState === 'failed' || peer.iceConnectionState === 'failed') {
-        markPublisherPeerDebug({ failureReason: 'peer_failed', restartReason: 'explicit-republish-required' });
-        setPeerStatus('failed');
+        markPublisherPeerDebug({ failureReason: 'ice_exchange_failed', restartReason: 'explicit-republish-required' });
+        setPeerStatus('ice_exchange_failed');
       }
       if (peer.connectionState === 'disconnected' || peer.iceConnectionState === 'disconnected') {
         markPublisherPeerDebug({ failureReason: 'peer_disconnected' });
@@ -513,10 +531,11 @@ export default function ConnectDevicePage() {
         if (signal.answer?.sdp && !activePeer.currentRemoteDescription && !activePeer.remoteDescription) {
           markPublisherPeerDebug({ answerSeenAt: Date.now(), answerSeen: true });
           await activePeer.setRemoteDescription(new RTCSessionDescription(signal.answer));
+          publisherAnswerAppliedRef.current = true;
           appendTrace(`peer:answer-applied ${sessionId}`);
           setPeerStatus('answer_applied');
           setBroadcast((prev) => ({ ...prev, stage: 'waiting_for_answer', waitingForAnswer: false, updatedAt: Date.now() }));
-          markPublisherPeerDebug({ answerAppliedAt: Date.now(), answerApplied: true, signalingState: activePeer.signalingState });
+          markPublisherPeerDebug({ answerAppliedAt: Date.now(), answerApplied: true, peerClosedBy: publisherPeerClosedByRef.current, signalingState: activePeer.signalingState });
         }
         for (const candidate of signal.ice_from_viewer || []) {
           const key = `${candidate.candidate}|${candidate.sdpMid || ''}|${candidate.sdpMLineIndex ?? ''}`;
@@ -738,6 +757,22 @@ export default function ConnectDevicePage() {
     return true;
   };
 
+  const handleStopBroadcast = () => {
+    clearPublisherSignalPoll();
+    if (peerConnectionRef.current) {
+      publisherPeerClosedByRef.current = 'explicit-stop-broadcast';
+      markPublisherPeerDebug({ peerClosedBy: publisherPeerClosedByRef.current, restartReason: 'explicit-stop-broadcast' });
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+      publisherActorTeardownCountRef.current += 1;
+    }
+    publisherAnswerAppliedRef.current = false;
+    stopPreview();
+    stopCamera();
+    setPeerStatus('idle');
+  };
+
+
   return (
     <DeviceMonitorShell
       mode={mode}
@@ -796,7 +831,7 @@ export default function ConnectDevicePage() {
         debugEvents={debugEnabled ? traceEvents : []}
         onUseSelectedLocalDevice={handleUseSelectedLocalDevice}
         onStartScreen={() => startPreview('screen')}
-        onStopPreview={() => { stopPreview(); stopCamera(); }}
+        onStopPreview={handleStopBroadcast}
         onStartDeviceRecording={() => startRecording()}
         onStopDeviceRecording={() => stopRecording()}
         onBackToExplorer={() => {

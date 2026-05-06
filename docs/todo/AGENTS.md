@@ -1,3 +1,10 @@
+## 2026-05-06 — WebRTC media-plane boundary hardening after answer confirmation (new)
+- [x] Split Explorer viewer peer truth into signaling/media/playback/ICE lanes so answer confirmation no longer collapses later media failures into a generic publisher-failed label.
+- [x] Hardened remote track attachment with stream-id/live-track diagnostics, Safari-safe video attributes, exact play rejection name/message telemetry, and a tap-to-play retry path that keeps the stream attached after playback rejection.
+- [x] Added media-plane failure markers (`remote_track_not_emitted`, `video_src_object_not_set`, `video_has_no_live_tracks`, `video_ready_state_zero`, `video_playback_failed`, `peer_ice_failed_before_track`, `ice_exchange_failed`) to Explorer viewer diagnostics.
+- [x] Hardened Connect Device publisher debug with `peerClosedBy` and answer-applied reuse so an answered publisher peer is not closed/recreated by a republish path unless the user explicitly stops or starts a new session.
+- [ ] Validate on real iPhone Safari whether the next failure lands in ICE (`peer_ice_failed_before_track`/`ice_exchange_failed`) or playback (`video_playback_failed` with rejection name/message).
+
 ## 2026-05-05 — Canonical live-session authority + peer actor stability patch (new)
 - [x] Added centralized `selectPrimaryLiveSessionForNodeSource` / `selectPrimaryLiveSessionsByNodeSource` contracts that reject runtime viewer events, ended/failed/superseded/stale sessions, and preserve older offered sessions over newer no-offer shells.
 - [x] Routed Explorer live panel, live merge diagnostics, WebRTC/live hooks, and Live Device Instances through the canonical selector so node_id/source_kind surfaces share the same selected session id.

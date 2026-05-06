@@ -523,7 +523,8 @@ test('live WebRTC peer actors own publisher/viewer media-plane transitions', () 
   const backendTest = fs.readFileSync(backendTestPath, 'utf8');
 
   assert.ok(device.includes('__connectDevicePublisherPeerDebug'));
-  assert.ok(device.includes('peerConnectionRef.current?.close()'));
+  assert.ok(device.includes('peerClosedBy: publisherPeerClosedByRef.current'));
+  assert.ok(device.includes("publisherPeerClosedByRef.current = 'component-unmount'"));
   assert.ok(device.includes('clearPublisherSignalPoll'));
   assert.ok(device.includes('signalPollTimerRef.current = window.setInterval(pollSignal, 1000)'));
   assert.ok(device.includes('pollSignal();'));
@@ -550,12 +551,16 @@ test('live WebRTC peer actors own publisher/viewer media-plane transitions', () 
   assert.ok(card.includes('await peerConnRef.current.setLocalDescription(answer)'));
   assert.ok(card.includes('await api.publishLiveSignalAnswer(sessionId, viewerId'));
   assert.ok(card.includes('await peerConnRef.current.addIceCandidate(candidate)'));
-  assert.ok(card.includes('peerVideoRef.current.srcObject = stream'));
-  assert.ok(card.includes('peerVideoRef.current.onloadedmetadata'));
-  assert.ok(card.includes('peerVideoRef.current.oncanplay'));
-  assert.ok(card.includes('peerVideoRef.current.onplaying'));
-  assert.ok(card.includes("setPeerStatus('playing')"));
-  assert.ok(card.includes("setPeerStatus('failed')"));
+  assert.ok(card.includes('video.srcObject = stream'));
+  assert.ok(card.includes('video.onloadedmetadata'));
+  assert.ok(card.includes('video.oncanplay'));
+  assert.ok(card.includes('video.onplaying'));
+  assert.ok(card.includes('videoPlayRejectedName'));
+  assert.ok(card.includes('Tap to play live stream'));
+  assert.ok(card.includes('video_playback_failed'));
+  assert.ok(card.includes('remote_track_not_emitted'));
+  assert.ok(card.includes("publishViewerState('playing', 'remote-track-playing'"));
+  assert.ok(card.includes("setPeerStatus(stale ? 'stale_session_not_found'"));
   assert.ok(card.includes('pollingLoopCount: viewerPollLoopCountRef.current'));
   assert.ok(card.includes('activePeerCount: 1'));
   assert.ok(!card.includes("setPeerStatus('connected');\n              setPeerDiagnostic('answer-posted')"));
@@ -4160,7 +4165,11 @@ test('LiveSourceCard viewer actor is keyed and does not regress to waiting after
   assert.ok(content.includes('onRemoteStreamRef.current?.'));
   assert.ok(content.includes('onStaleSessionRef.current?.'));
   assert.ok(content.includes("}, [api, isActive, peerEnabled, peerRetryToken, session.session_id])"));
-  assert.ok(content.includes("publishViewerState('answer_confirmed', 'answer_confirmed')"));
+  assert.ok(content.includes("publishViewerState('answer_confirmed', 'answer_confirmed', { signaling: 'answer_confirmed', media: 'waiting_for_track' })"));
+  assert.ok(content.includes('signalingStatus'));
+  assert.ok(content.includes('mediaStatus'));
+  assert.ok(content.includes('playbackStatus'));
+  assert.ok(content.includes('iceStatus'));
   assert.ok(content.includes("'answer confirmed, waiting for media track'"));
 });
 
@@ -4169,10 +4178,13 @@ test('device publisher peer is session-owned and republish is explicit', () => {
   const content = fs.readFileSync(devicePath, 'utf8');
   assert.ok(content.includes('publisherActorKey'));
   assert.ok(content.includes('publisherActorCreatedAtRef'));
-  assert.ok(content.includes("restartReason: 'republish-current-session'"));
+  assert.ok(content.includes("restartReason: 'publisher-already-answer-applied'"));
+  assert.ok(content.includes("restartReason: 'republish-current-session-before-answer'"));
   assert.ok(content.includes('const existingPublisherSession = activeBroadcastSessionRef.current || activeBroadcastSession || session;'));
   assert.ok(content.includes("'reused_current_session'"));
   assert.ok(content.includes("'explicit-republish-required'"));
+  assert.ok(content.includes('peerClosedBy'));
+  assert.ok(content.includes('handleStopBroadcast'));
   assert.ok(content.includes('offerPublished: true'));
   assert.ok(content.includes('answerApplied: true'));
 });
