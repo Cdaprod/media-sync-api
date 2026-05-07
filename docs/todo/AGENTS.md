@@ -1,3 +1,10 @@
+## 2026-05-07 — Connect Device publisher sender-bound offer patch (new)
+- [x] Refactored Connect Device publisher transceiver setup so live camera/audio `MediaStreamTrack`s are passed directly to `peer.addTransceiver(track, { direction: 'sendonly', streams: [stream] })` before `createOffer()`.
+- [x] Updated publisher track reconciliation to match transceivers by `sender.track?.kind` first, fall back to receiver kind only when needed, force `sendonly`, and `replaceTrack(track)` whenever the active sender track id differs.
+- [x] Added publisher sender binding diagnostics (`publisherVideoSenderTrackId`, `publisherAudioSenderTrackId`, `publisherVideoSenderReadyState`, `publisherVideoSenderEnabled`, `publisherSenderBoundBeforeOffer`, `offerHasVideoSendonly`, `offerHasAudioSendonly`) to prove RTP senders are bound before offer publication.
+- [x] Changed Stop Broadcast to close the WebRTC publisher and stop preview bookkeeping without calling `stopCamera()`, preserving the camera track for live RTP debugging/rebroadcast.
+- [ ] Next validation item: on iPhone, confirm publisher `senderTrackIds` includes the live camera video track before offer creation and Explorer moves from `video_receiver_exists_but_no_inbound_rtp` to inbound video bytes/decoded frames.
+
 ## 2026-05-07 — Explorer WebRTC viewer composite stream assembly (new)
 - [x] Changed `LiveSourceCard` viewer media authority to maintain one actor-owned composite `MediaStream` and reconcile it from `RTCPeerConnection.getReceivers()` plus `ontrack`, instead of trusting `event.streams[0]` as preview source truth.
 - [x] Rebound top preview and peer video surfaces from the composite stream across `setRemoteDescription`, `ontrack`, answer confirmation, and RTP stats polling so audio-only partial streams cannot replace the displayed video stream.

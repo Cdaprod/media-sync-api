@@ -463,26 +463,69 @@ export default function ConnectDevicePage() {
     });
   };
 
+  const publishPublisherSenderBindingDebug = (peer: RTCPeerConnection, patch: Record<string, unknown> = {}) => {
+    const videoSender = peer.getSenders().find((sender) => sender.track?.kind === 'video') || null;
+    const audioSender = peer.getSenders().find((sender) => sender.track?.kind === 'audio') || null;
+    markPublisherPeerDebug({
+      publisherVideoSenderTrackId: videoSender?.track?.id ?? null,
+      publisherAudioSenderTrackId: audioSender?.track?.id ?? null,
+      publisherVideoSenderReadyState: videoSender?.track?.readyState ?? null,
+      publisherVideoSenderEnabled: videoSender?.track?.enabled ?? null,
+      publisherSenderBoundBeforeOffer: Boolean(videoSender?.track && audioSender?.track),
+      ...summarizePeerSenders(peer),
+      ...summarizePeerTransceivers(peer),
+      ...patch,
+    });
+  };
+
   const ensurePublisherTransceivers = (peer: RTCPeerConnection, stream: MediaStream) => {
     const transceivers = peer.getTransceivers();
     const videoTrack = stream.getVideoTracks().find((track) => track.readyState === 'live') || null;
     const audioTrack = stream.getAudioTracks().find((track) => track.readyState === 'live') || null;
-    if (videoTrack && !transceivers.some((transceiver) => transceiver.receiver.track.kind === 'video')) {
-      peer.addTransceiver('video', { direction: 'sendonly' });
+    const hasVideoSender =
+      peer.getSenders().some((sender) => sender.track?.kind === 'video')
+      || transceivers.some((transceiver) => transceiver.sender.track?.kind === 'video');
+    const hasAudioSender =
+      peer.getSenders().some((sender) => sender.track?.kind === 'audio')
+      || transceivers.some((transceiver) => transceiver.sender.track?.kind === 'audio');
+    if (videoTrack && !hasVideoSender) {
+      const tx = peer.addTransceiver(videoTrack, {
+        direction: 'sendonly',
+        streams: [stream],
+      });
+      tx.direction = 'sendonly';
     }
-    if (audioTrack && !transceivers.some((transceiver) => transceiver.receiver.track.kind === 'audio')) {
-      peer.addTransceiver('audio', { direction: 'sendonly' });
+    if (audioTrack && !hasAudioSender) {
+      const tx = peer.addTransceiver(audioTrack, {
+        direction: 'sendonly',
+        streams: [stream],
+      });
+      tx.direction = 'sendonly';
     }
+    publishPublisherSenderBindingDebug(peer, { publisherSenderBindingReason: 'ensurePublisherTransceivers' });
   };
 
   const reconcilePublisherTracks = async (peer: RTCPeerConnection, stream: MediaStream) => {
     ensurePublisherTransceivers(peer, stream);
-    const transceivers = peer.getTransceivers();
     for (const track of stream.getTracks().filter((item) => item.readyState === 'live')) {
-      const transceiver = transceivers.find((candidate) => candidate.receiver.track.kind === track.kind);
-      const sender = transceiver?.sender || peer.getSenders().find((candidate) => candidate.track?.kind === track.kind);
-      if (sender && sender.track?.id !== track.id) await sender.replaceTrack(track);
+      const transceivers = peer.getTransceivers();
+      const transceiver =
+        transceivers.find((candidate) => candidate.sender.track?.kind === track.kind)
+        || transceivers.find((candidate) => candidate.receiver.track.kind === track.kind);
+      if (!transceiver) {
+        const tx = peer.addTransceiver(track, {
+          direction: 'sendonly',
+          streams: [stream],
+        });
+        tx.direction = 'sendonly';
+        continue;
+      }
+      transceiver.direction = 'sendonly';
+      if (transceiver.sender.track?.id !== track.id) {
+        await transceiver.sender.replaceTrack(track);
+      }
     }
+    publishPublisherSenderBindingDebug(peer, { publisherSenderBindingReason: 'reconcilePublisherTracks' });
   };
 
   const publishPublisherIceCandidateDebug = async (patch: Record<string, unknown> = {}) => {
@@ -644,7 +687,11 @@ export default function ConnectDevicePage() {
     peer.onicegatheringstatechange = publishStateDebug;
     peer.onsignalingstatechange = publishStateDebug;
     await reconcilePublisherTracks(peer, stream);
-    markPublisherPeerDebug({ ...summarizePeerSenders(peer), ...summarizePeerTransceivers(peer), localVideoTrackId: stream.getVideoTracks()[0]?.id ?? null, localVideoTrackReadyState: stream.getVideoTracks()[0]?.readyState ?? null });
+    publishPublisherSenderBindingDebug(peer, {
+      localVideoTrackId: stream.getVideoTracks()[0]?.id ?? null,
+      localVideoTrackReadyState: stream.getVideoTracks()[0]?.readyState ?? null,
+      publisherSenderBoundBeforeOffer: true,
+    });
     peer.onicecandidate = (event) => {
       if (!event.candidate) return;
       deviceIcePublishedCountRef.current += 1;
@@ -657,7 +704,17 @@ export default function ConnectDevicePage() {
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
     markBroadcastDebug({ offerCreated: true });
-    markPublisherPeerDebug({ offerCreatedAt, signalingState: peer.signalingState, offerVideoDirection: extractMediaDirection(offer.sdp || '', 'video'), offerAudioDirection: extractMediaDirection(offer.sdp || '', 'audio'), ...summarizePeerSenders(peer), ...summarizePeerTransceivers(peer) });
+    markPublisherPeerDebug({
+      offerCreatedAt,
+      signalingState: peer.signalingState,
+      offerVideoDirection: extractMediaDirection(offer.sdp || '', 'video'),
+      offerAudioDirection: extractMediaDirection(offer.sdp || '', 'audio'),
+      offerHasVideoSendonly: extractMediaDirection(offer.sdp || '', 'video') === 'sendonly',
+      offerHasAudioSendonly: extractMediaDirection(offer.sdp || '', 'audio') === 'sendonly',
+      publisherSenderBoundBeforeOffer: true,
+      ...summarizePeerSenders(peer),
+      ...summarizePeerTransceivers(peer),
+    });
     try {
       await api.publishLiveSignalOffer(sessionId, { type: 'offer', sdp: offer.sdp || '' }, nodeId || undefined);
       markBroadcastDebug({ offerPosted: true, offerPostStatus: 'ok' });
@@ -940,7 +997,7 @@ export default function ConnectDevicePage() {
     }
     publisherAnswerAppliedRef.current = false;
     stopPreview();
-    stopCamera();
+    markPublisherPeerDebug({ cameraPreservedAfterStopBroadcast: true });
     setPeerStatus('idle');
   };
 

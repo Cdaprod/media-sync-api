@@ -3878,6 +3878,9 @@ test('connect device route keeps canonical shim and deterministic broadcast wiri
   assert.ok(page.includes('watchLiveSession('));
   assert.ok(page.includes("startPreview('camera', { stream"));
   assert.ok(page.includes('await publishPeerOffer(nextSession, stream);'));
+  assert.ok(page.includes('cameraPreservedAfterStopBroadcast'));
+  const stopBroadcastBlock = page.slice(page.indexOf('const handleStopBroadcast = () => {'), page.indexOf('return (', page.indexOf('const handleStopBroadcast = () => {')));
+  assert.ok(!stopBroadcastBlock.includes('stopCamera()'));
   assert.ok(page.includes('syncBrowserRuntimeNode(nodeId)'));
   assert.ok(page.includes("setHeartbeatState('auth_failed')"));
   assert.ok(!page.includes("stopCamera(); setHeartbeatState('auth_failed')"));
@@ -4282,9 +4285,20 @@ test('WebRTC live preview uses explicit transceiver directions and SDP diagnosti
   const card = fs.readFileSync(path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx'), 'utf8');
   const sdpDiagnostics = fs.readFileSync(path.join(packageRoot, 'src', 'live', 'webrtcSdpDiagnostics.ts'), 'utf8');
 
-  assert.ok(device.includes("peer.addTransceiver('video', { direction: 'sendonly' })") || device.includes('peer.addTransceiver("video", { direction: "sendonly" })'));
-  assert.ok(device.includes("peer.addTransceiver('audio', { direction: 'sendonly' })") || device.includes('peer.addTransceiver("audio", { direction: "sendonly" })'));
-  assert.ok(device.includes('await sender.replaceTrack(track)'));
+  assert.ok(device.includes('peer.addTransceiver(videoTrack, {'));
+  assert.ok(device.includes('peer.addTransceiver(audioTrack, {'));
+  assert.ok(device.includes('peer.addTransceiver(track, {'));
+  assert.ok(device.includes('streams: [stream]'));
+  assert.ok(device.includes('candidate.sender.track?.kind === track.kind'));
+  assert.ok(device.includes('await transceiver.sender.replaceTrack(track)'));
+  assert.ok(device.includes('publisherVideoSenderTrackId'));
+  assert.ok(device.includes('publisherAudioSenderTrackId'));
+  assert.ok(device.includes('publisherVideoSenderReadyState'));
+  assert.ok(device.includes('publisherVideoSenderEnabled'));
+  assert.ok(device.includes('publisherSenderBoundBeforeOffer'));
+  assert.ok(device.includes('offerHasVideoSendonly'));
+  assert.ok(device.includes('offerHasAudioSendonly'));
+  assert.ok(!device.includes("peer.addTransceiver('video', { direction: 'sendonly' })"));
   assert.ok(device.includes('offerVideoDirection'));
   assert.ok(device.includes('offerAudioDirection'));
   assert.ok(device.includes('senderKinds'));
