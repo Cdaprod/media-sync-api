@@ -353,7 +353,7 @@ test('connect device page and live-session hook guard media APIs for insecure iO
   assert.ok(page.includes('iOS Safari requires HTTPS for camera access on LAN IP addresses.'));
   assert.ok(page.includes('Serve Explorer/API over HTTPS for device camera activation.'));
   assert.ok(page.includes('disabled={!capability.hasGetUserMedia}'));
-  assert.ok(page.includes('const shouldShowScreenAction = capability.hasGetDisplayMedia && !capability.isLikelyIOS;'));
+  assert.match(page, /const shouldShowScreenAction =\s*capability\.hasGetDisplayMedia && !capability\.isLikelyIOS;/);
   assert.ok(page.includes('Share Screen unavailable'));
 
   assert.ok(sourcePanels.includes('Remote source surfaces'));
@@ -401,8 +401,8 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
 
   assert.ok(device.includes('webrtc: {peerStatus}'));
   assert.ok(device.includes('new RTCPeerConnection()'));
-  assert.ok(device.includes("api.publishLiveSignalOffer(sessionId"));
-  assert.ok(device.includes("api.publishLiveSignalIce(sessionId, 'device', activeViewerIdRef.current"));
+  assert.match(device, /api\s*\.\s*publishLiveSignalOffer\(\s*sessionId/);
+  assert.match(device, /api\s*\.\s*publishLiveSignalIce\(\s*sessionId,\s*'device',\s*activeViewerIdRef\.current/);
   assert.ok(device.includes('setBrowserRuntimeIdentity(nodeId, queryToken);'));
   assert.ok(device.includes("const queryNodeId = searchParams.get('node_id');"));
   assert.ok(device.includes("const nodeId = queryNodeId || storedNodeId;"));
@@ -412,7 +412,7 @@ test('live session signaling API and peer-viewer hooks are wired', () => {
   assert.ok(device.includes('const getUsableCameraStream = resolveActiveCameraStream;'));
   assert.ok(device.includes('const stream = await ensureCameraStreamReady();'));
   assert.ok(device.includes('const enabled = await handleEnableCamera();'));
-  assert.ok(device.includes("source: existingStream ? 'existing-camera-session' : 'new-camera-session'"));
+  assert.match(device, /source:\s*existingStream\s*\?\s*'existing-camera-session'\s*:\s*'new-camera-session'/);
   assert.ok(device.includes("setPeerStatus('offer-published')"));
   assert.ok(device.includes("setPeerStatus('connected')"));
   assert.ok(device.includes("setPeerStatus('failed')"));
@@ -472,7 +472,7 @@ test('device live session start uses POST device lane and never GETs start as a 
   assert.ok(api.includes("if (sessionId === 'start')"));
   assert.ok(api.includes('invalid_get_live_session_start'));
   assert.ok(liveHook.includes('api.startLiveSession(nodeId, sourceKind'));
-  assert.ok(device.includes("await startPreview('camera', { stream"));
+  assert.match(device, /await startPreview\('camera', \{\s*stream/);
   assert.ok(device.includes('cameraStreamResolved: true'));
   assert.ok(device.includes('startLiveSessionSessionId: nextSession.session_id'));
   for (const filePath of readSourceFiles(path.join(packageRoot, 'src')).concat(readSourceFiles(path.join(packageRoot, 'app', 'connect', 'device')))) {
@@ -530,12 +530,12 @@ test('live WebRTC peer actors own publisher/viewer media-plane transitions', () 
   assert.ok(device.includes('clearPublisherSignalPoll'));
   assert.ok(device.includes('signalPollTimerRef.current = window.setInterval(pollSignal, 1000)'));
   assert.ok(device.includes('pollSignal();'));
-  assert.ok(device.includes('api.getLiveSignalState(sessionId)'));
-  assert.ok(device.includes('await activePeer.setRemoteDescription(new RTCSessionDescription(signal.answer))'));
+  assert.match(device, /api\s*\.\s*getLiveSignalState\(\s*sessionId\s*\)/);
+  assert.match(device, /await activePeer\.setRemoteDescription\(\s*new RTCSessionDescription\(signal\.answer\),?\s*\)/);
   assert.ok(device.includes("setPeerStatus('answer_applied')"));
   assert.ok(device.includes("await applyViewerIceCandidate(candidate, 'poll')"));
   assert.ok(device.includes('await flushQueuedViewerIce()'));
-  assert.ok(device.includes("peer.connectionState === 'connected' || peer.iceConnectionState === 'connected' || peer.iceConnectionState === 'completed'"));
+  assert.match(device, /peer\.connectionState === 'connected' \|\|\s*peer\.iceConnectionState === 'connected' \|\|\s*peer\.iceConnectionState === 'completed'/);
   const answerApplyBlock = device.slice(device.indexOf('if (signal.answer?.sdp'), device.indexOf('for (const candidate of signal.ice_from_viewer'));
   assert.ok(!answerApplyBlock.includes("setPeerStatus('connected')"), 'publisher must not mark connected from answer existence');
   assert.ok(device.includes('pollingLoopCount: publisherSignalPollLoopCountRef.current'));
@@ -3768,16 +3768,16 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(liveSession.includes('deviceId: { exact: options.deviceId }'));
   assert.ok(page.includes('camera.selectedDeviceId'));
   assert.ok(page.includes('const handleStartBroadcast = async () => {'));
-  assert.ok(page.includes('const publishPeerOffer = async (sessionRecord'));
+  assert.match(page, /const publishPeerOffer = async \(\s*sessionRecord/);
   assert.ok(page.includes("import { ensureLiveBroadcastAlignment } from './liveBroadcastAlignment'"));
   assert.ok(!page.includes('crypto.randomUUID()'));
   assert.ok(page.includes('await startCamera({'));
-  assert.ok(page.includes("await startPreview('camera', { stream, deviceId: camera.selectedDeviceId ?? undefined })"));
-  assert.ok(page.includes('publishLiveSignalOffer(sessionId'));
-  assert.ok(page.includes('ensureLiveBroadcastAlignment({ api, sessionId, nodeId: nodeId ||'));
+  assert.match(page, /await startPreview\('camera', \{\s*stream,\s*deviceId: camera\.selectedDeviceId \?\? undefined,?\s*\}\)/);
+  assert.match(page, /publishLiveSignalOffer\(\s*sessionId/);
+  assert.match(page, /ensureLiveBroadcastAlignment\(\{\s*api,\s*sessionId,\s*nodeId: nodeId \|\|/);
   assert.ok(page.includes('const handleUseSelectedLocalDevice = async () => {'));
-  assert.ok(preview.includes('const { devices: hookLocalDevices'));
-  assert.ok(preview.includes("useRemoteCameras({ mode, remotePickerOpen: pickerOpen && mode === 'remote' })"));
+  assert.match(preview, /const \{\s*devices: hookLocalDevices/);
+  assert.match(preview, /useRemoteCameras\(\{\s*mode,\s*remotePickerOpen: pickerOpen && mode === 'remote',?\s*\}\)/);
   assert.ok(preview.includes('Array.isArray(localDevices) ? localDevices : []'));
   assert.ok(preview.includes('localDevices={safeLocalDevices}'));
   assert.ok(!liveSession.includes('Confirm camera permissions and use a secure (HTTPS) origin on iOS Safari.'));
@@ -3805,8 +3805,8 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(shell.includes("onClick={() => onModeChange('local')"));
   assert.ok(shell.includes("onClick={() => onModeChange('remote')"));
   assert.ok(preview.includes('Start Live Broadcast'));
-  assert.ok(preview.includes('onClick={() => { void onEnableCamera(); }}'));
-  assert.ok(preview.includes('onClick={() => { void onStartBroadcast(); }}'));
+  assert.match(preview, /onClick=\{\(\) => \{\s*void onEnableCamera\(\);\s*\}\}/);
+  assert.match(preview, /onClick=\{\(\) => \{\s*void onStartBroadcast\(\);\s*\}\}/);
   assert.ok(preview.includes('Camera source'));
   assert.ok(preview.includes('Camera ready'));
   assert.ok(preview.includes('Pick Camera'));
@@ -3815,7 +3815,7 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(page.includes('onModeChange={setMode}'));
   assert.ok(page.includes('videoRef.current.srcObject = stream;'));
   assert.ok(page.includes('nodeHeartbeatTimerRef.current = window.setInterval'));
-  assert.ok(page.includes('const nodeHeartbeatTimerRef = useRef<ReturnType<typeof window.setInterval> | null>(null);'));
+  assert.match(page, /const nodeHeartbeatTimerRef = useRef<ReturnType<\s*typeof window\.setInterval\s*> \| null>\(null\);/);
   assert.ok(page.includes('const clearNodeHeartbeatTimer = () => {'));
   assert.ok(page.includes('clearNodeHeartbeatTimer();'));
   assert.ok(page.includes('const resolveActiveCameraStream = (): MediaStream | null => {'));
@@ -3826,7 +3826,7 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(!page.includes('getStoredNodeToken(nodeId)'));
   assert.ok(!page.includes('Authorization: `Bearer'));
   assert.ok(page.includes('const syncResult = await syncBrowserRuntimeNode(nodeId);'));
-  assert.ok(page.includes("source: existingStream ? 'existing-camera-session' : 'new-camera-session'"));
+  assert.match(page, /source:\s*existingStream\s*\?\s*'existing-camera-session'\s*:\s*'new-camera-session'/);
   assert.ok(page.includes("appendTrace('heartbeat:skipped-no-token')"));
   assert.ok(page.includes('void syncBrowserRuntimeNode(nodeId).then((result) => {'));
   assert.ok(!page.includes('const nodes = await api.listNodes();'));
@@ -3874,13 +3874,15 @@ test('connect device route keeps canonical shim and deterministic broadcast wiri
 
   assert.ok(shim.includes("export { default } from './page';"));
   assert.ok(page.includes('const handleStartBroadcast = async () => {'));
-  assert.ok(page.includes('const publishPeerOffer = async (sessionRecord: { session_id: string }, stream: MediaStream) => {'));
+  assert.match(page, /const publishPeerOffer = async \(\s*sessionRecord: \{ session_id: string \},\s*stream: MediaStream,?\s*\) => \{/);
   assert.ok(page.includes('watchLiveSession('));
-  assert.ok(page.includes("startPreview('camera', { stream"));
-  assert.ok(page.includes('await publishPeerOffer(nextSession, stream);'));
+  assert.match(page, /startPreview\('camera', \{\s*stream/);
+  assert.match(page, /await publishPeerOffer\(nextSession,\s*stream\);/);
   assert.ok(page.includes('cameraPreservedAfterStopBroadcast'));
   const stopBroadcastBlock = page.slice(page.indexOf('const handleStopBroadcast = () => {'), page.indexOf('return (', page.indexOf('const handleStopBroadcast = () => {')));
   assert.ok(!stopBroadcastBlock.includes('stopCamera()'));
+  assert.ok(!stopBroadcastBlock.includes('stopPreview()'));
+  assert.ok(stopBroadcastBlock.includes('cameraPreservedAfterStopBroadcast'));
   assert.ok(page.includes('syncBrowserRuntimeNode(nodeId)'));
   assert.ok(page.includes("setHeartbeatState('auth_failed')"));
   assert.ok(!page.includes("stopCamera(); setHeartbeatState('auth_failed')"));
@@ -4090,6 +4092,48 @@ test('LiveDeviceInstanceCard shows session tag and unavailableReason when watch 
   assert.ok(card.includes('offer:'), 'card must show offer:yes/no tag');
   assert.ok(card.includes('answer:'), 'card must show answer:yes/no tag');
   assert.ok(card.includes('unavailableReason'), 'card must surface unavailableReason for diagnostic display');
+});
+
+test('connect/device monitor controls and broadcast creation failure contracts stay stream-owned', () => {
+  const pagePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const previewPath = path.join(packageRoot, 'app', 'connect', 'device', 'FullscreenDevicePreview.tsx');
+  const page = fs.readFileSync(pagePath, 'utf8');
+  const preview = fs.readFileSync(previewPath, 'utf8');
+
+  assert.ok(preview.includes('const hasMonitorStream = hasCameraReady || hasLiveVideoStream();'));
+  assert.ok(preview.includes('const shouldShowMonitorControls = overlaysVisible && hasMonitorStream;'));
+  assert.match(preview, /top-cluster.*shouldShowMonitorControls/s);
+  assert.match(preview, /bottom-bar.*shouldShowMonitorControls/s);
+  assert.ok(preview.includes('const shouldShowStopBroadcast ='));
+  assert.ok(preview.includes('activeBroadcastSessionId || sessionId'));
+  assert.ok(preview.includes('Start Broadcast'));
+
+  const stopBroadcastBlock = page.slice(page.indexOf('const handleStopBroadcast = () => {'), page.indexOf('return (', page.indexOf('const handleStopBroadcast = () => {')));
+  assert.ok(!stopBroadcastBlock.includes('stopCamera()'));
+  assert.ok(!stopBroadcastBlock.includes('stopPreview()'));
+  assert.ok(stopBroadcastBlock.includes('setActiveBroadcastSession(null)'));
+  assert.ok(stopBroadcastBlock.includes('cameraPreservedAfterStopBroadcast'));
+
+  assert.ok(page.includes('broadcastStartRequestedAt'));
+  assert.ok(page.includes('broadcastStartFailedAt'));
+  assert.ok(page.includes('broadcastStartFailureClass'));
+  assert.ok(page.includes('nodeIdAtBroadcastStart'));
+  assert.ok(page.includes('hasNodeTokenAtBroadcastStart'));
+  assert.ok(page.includes('liveSessionCreateAttempted'));
+  assert.ok(page.includes('liveSessionCreateSucceeded'));
+  assert.ok(page.includes('liveSessionCreateError'));
+  assert.ok(page.includes('sessionIdAfterStartPreview'));
+  assert.ok(page.includes("markBroadcastDebug({ liveSessionCreateAttempted: true });"));
+  assert.match(page, /if \(!nextSession\?\.session_id\) \{[\s\S]*?return false;[\s\S]*?\}\n\s*markBroadcastDebug\(\{[\s\S]*?liveSessionCreateSucceeded: true/);
+  assert.match(page, /if \(!nextSession\?\.session_id\) \{[\s\S]*?setPeerStatus\('idle'\);[\s\S]*?return false;[\s\S]*?\}/);
+  const noSessionBlock = page.slice(page.indexOf('if (!nextSession?.session_id) {'), page.indexOf('markBroadcastDebug({', page.indexOf('if (!nextSession?.session_id) {') + 1));
+  assert.ok(!noSessionBlock.includes('publishPeerOffer('));
+  assert.ok(!noSessionBlock.includes('setActiveRuntimeSession('));
+  assert.ok(!noSessionBlock.includes('publishBrowserRuntimeSession('));
+  assert.ok(page.indexOf('if (!nextSession?.session_id) {') < page.indexOf('await publishPeerOffer(nextSession, stream);'));
+  assert.ok(page.indexOf('if (!nextSession?.session_id) {') < page.indexOf('setActiveRuntimeSession(nextSession.session_id'));
+  assert.ok(page.includes("requestExplorerRefresh('device-live-session-created')"));
+  assert.ok(page.includes("requestExplorerRefresh('device-offer-published')"));
 });
 
 test('connect/device page.tsx emits structured broadcast diagnostics on window.__connectDeviceBroadcastDebug', () => {
@@ -4394,7 +4438,7 @@ test('device publisher peer is session-owned and republish is explicit', () => {
   assert.ok(content.includes('publisherActorCreatedAtRef'));
   assert.ok(content.includes("restartReason: 'publisher-already-answer-applied'"));
   assert.ok(content.includes("restartReason: 'republish-current-session-before-answer'"));
-  assert.ok(content.includes('const existingPublisherSession = activeBroadcastSessionRef.current || activeBroadcastSession || session;'));
+  assert.match(content, /const existingPublisherSession =\s*activeBroadcastSessionRef\.current \|\| activeBroadcastSession \|\| session;/);
   assert.ok(content.includes("'reused_current_session'"));
   assert.ok(content.includes("'explicit-republish-required'"));
   assert.ok(content.includes('peerClosedBy'));

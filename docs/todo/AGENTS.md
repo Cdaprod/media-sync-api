@@ -1,3 +1,10 @@
+## 2026-05-07 — Connect Device monitor controls + broadcast creation diagnostics (new)
+- [x] Restored Connect Device monitor top/bottom controls from active local `MediaStream` ownership instead of live-session state, so camera-ready previews keep Record/Start Broadcast/Fullscreen/Explorer/Switch controls visible even when no session exists.
+- [x] Restricted Stop Broadcast visibility to real broadcast sessions and changed stop handling to close publisher/polling/session bookkeeping without stopping the local camera preview.
+- [x] Hardened broadcast start so live-session creation failures are classified before peer creation, publish/runtime registration are skipped without `session_id`, Explorer refresh fires only after session/offer success, and `__connectDeviceBroadcastDebug` records create-attempt diagnostics.
+- [x] Updated Explorer static contracts for stream-owned monitor controls, stop-broadcast camera preservation, live-session creation failure diagnostics, and session-id-gated publish/runtime registration.
+- [ ] Next validation item: on iPhone Safari with missing/bad node auth, confirm `Heartbeat: auth_failed` remains badge-only while the local camera monitor controls stay visible and Start Broadcast reports `live_session_create_failed`/`auth_failed` diagnostics.
+
 ## 2026-05-07 — Connect Device publisher sender-bound offer patch (new)
 - [x] Refactored Connect Device publisher transceiver setup so live camera/audio `MediaStreamTrack`s are passed directly to `peer.addTransceiver(track, { direction: 'sendonly', streams: [stream] })` before `createOffer()`.
 - [x] Updated publisher track reconciliation to match transceivers by `sender.track?.kind` first, fall back to receiver kind only when needed, force `sendonly`, and `replaceTrack(track)` whenever the active sender track id differs.
