@@ -136,6 +136,20 @@ def _stamp_live_session_owner_debug(runtime: AppRuntime, response: Response) -> 
         response.headers["X-Live-Session-Service-Registry-Id"] = str(id(service.session_registry))
 
 
+
+
+def _prune_stale_live_sessions(runtime: AppRuntime) -> list[str]:
+    service = runtime.services.live_session_service
+    if service is None:
+        return []
+    pruned_ids = service.prune_stale_sessions()
+    live_registry = getattr(runtime, "live_sessions", None)
+    for session_id in pruned_ids:
+        delete = getattr(live_registry, "delete", None)
+        if callable(delete):
+            delete(session_id)
+    return pruned_ids
+
 def _ensure_node(runtime: AppRuntime, node_id: str) -> None:
     registry = runtime.services.node_registry
     if registry is None:
@@ -445,6 +459,7 @@ async def upload_live_session_recording(
 @router.get("", response_model=list[LiveSessionResponse])
 async def list_live_sessions(response: Response, runtime: AppRuntime = Depends(get_runtime)) -> list[LiveSessionResponse]:
     _stamp_live_session_owner_debug(runtime, response)
+    _prune_stale_live_sessions(runtime)
     registry = runtime.services.live_session_registry
     if registry is None:
         return []

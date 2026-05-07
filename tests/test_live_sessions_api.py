@@ -141,8 +141,100 @@ def test_live_session_list_drops_stale_active_sessions(client):
     listed = client.get("/api/live_sessions")
     assert listed.status_code == 200
     assert listed.json() == []
-    assert registry.get("sess-stale") is None
+    pruned = registry.require("sess-stale")
+    assert pruned.status == "ended"
+    assert pruned.metadata["stale_prune_reason"] == "active_session_ttl_expired"
 
+
+def test_live_session_service_prunes_stale_preview_connected_and_waiting_sessions(client):
+    runtime = client.app.state.runtime
+    service = runtime.services.live_session_service
+    registry = runtime.services.live_session_registry
+    assert service is not None
+    assert registry is not None
+    now = datetime.now(timezone.utc)
+    stale_at = (now - timedelta(seconds=90)).isoformat()
+    fresh_at = now.isoformat()
+    for session_id, status in (
+        ("sess-stale-preview", "previewing"),
+        ("sess-stale-connected", "connected"),
+        ("sess-stale-waiting", "waiting_for_answer"),
+    ):
+        registry.upsert(
+            LiveSession(
+                session_id=session_id,
+                node_id="runner-prune",
+                source_kind="camera",
+                status=status,
+                started_at=stale_at,
+                last_heartbeat_at=stale_at,
+                chunk_count=0,
+            )
+        )
+        service.signal_state_by_session[session_id] = {"updated_at": stale_at}
+    registry.upsert(
+        LiveSession(
+            session_id="sess-fresh-preview",
+            node_id="runner-prune",
+            source_kind="camera",
+            status="previewing",
+            started_at=fresh_at,
+            last_heartbeat_at=fresh_at,
+            chunk_count=0,
+        )
+    )
+
+    pruned = service.prune_stale_sessions(now=now)
+
+    assert pruned == ["sess-stale-preview", "sess-stale-connected", "sess-stale-waiting"]
+    for session_id in pruned:
+        session = registry.require(session_id)
+        assert session.status == "ended"
+        assert session.metadata["stale_prune_reason"] == "active_session_ttl_expired"
+        assert session_id not in service.signal_state_by_session
+    assert registry.require("sess-fresh-preview").status == "previewing"
+
+
+def test_live_routes_prune_stale_durable_and_webrtc_sessions(client):
+    runtime = client.app.state.runtime
+    registry = runtime.services.live_session_registry
+    live_registry = runtime.live_sessions
+    assert registry is not None
+    stale_at = (datetime.now(timezone.utc) - timedelta(seconds=90)).isoformat()
+    fresh_at = datetime.now(timezone.utc).isoformat()
+    stale = LiveSession(
+        session_id="sess-stale-webrtc-bridge",
+        node_id="runner-stale-webrtc",
+        source_kind="camera",
+        status="previewing",
+        started_at=stale_at,
+        last_heartbeat_at=stale_at,
+        chunk_count=0,
+    )
+    fresh = LiveSession(
+        session_id="sess-fresh-webrtc-bridge",
+        node_id="runner-fresh-webrtc",
+        source_kind="camera",
+        status="previewing",
+        started_at=fresh_at,
+        last_heartbeat_at=fresh_at,
+        chunk_count=0,
+    )
+    registry.upsert(stale)
+    registry.upsert(fresh)
+    live_registry.create(session_id=stale.session_id, node_id=stale.node_id)
+    live_registry.set_offer(stale.session_id, {"type": "offer", "sdp": "v=0"})
+    live_registry.create(session_id=fresh.session_id, node_id=fresh.node_id)
+    live_registry.set_offer(fresh.session_id, {"type": "offer", "sdp": "v=0"})
+
+    listed = client.get("/api/live")
+
+    assert listed.status_code == 200
+    session_ids = [entry["session_id"] for entry in listed.json()["sessions"]]
+    assert stale.session_id not in session_ids
+    assert fresh.session_id in session_ids
+    assert live_registry.get(stale.session_id) is None
+    assert registry.require(stale.session_id).status == "ended"
 
 def test_live_session_control_updates_desired_action(client):
     node_id, token = _register_node_auth(client, "runner-live-3")

@@ -1,3 +1,10 @@
+## 2026-05-07 — WebRTC stale live-session pruning + rendered-frame success gate (new)
+- [x] Added `LiveSessionService.prune_stale_sessions(...)` to end active preview/recording/waiting/connected sessions whose heartbeat exceeds the live-session TTL and clear their signal state without resurrecting superseded sessions.
+- [x] Wired stale-session pruning through durable live-session list/start routes and WebRTC `/api/live` listing so stale durable sessions remove their bridged WebRTC runtime entries.
+- [x] Hardened `/api/live/{session_id}/offer` to remove older same-node WebRTC transport shells before publishing the current offer, keeping one visible canonical live surface per device node.
+- [x] Added backend coverage for explicit service pruning, durable/WebRTC bridge pruning, stale metadata, and fresh-session preservation.
+- [ ] Next validation item: with one Device tab and one Explorer tab, `/api/live` should report one current session for the node after TTL cleanup; then verify Explorer only enables preview success when `decodedFramesRenderable=true` and visible video layout dimensions are nonzero.
+
 ## 2026-05-07 — Explorer WebRTC visible video surface patch (new)
 - [x] Routed decoded WebRTC `MediaStream` playback through a real visible `<video>` in the top Live preview whenever a remote stream or track exists, keeping chunk-preview `<img>` fallback only for non-WebRTC preview chunks.
 - [x] Added one shared viewer video callback ref that applies Safari-safe video attributes before assigning `srcObject`, reuses existing stream attachments, avoids `video.load()`, and keeps tap-to-play retry on the attached stream.

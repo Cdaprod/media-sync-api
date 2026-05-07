@@ -575,7 +575,10 @@ test('live WebRTC peer actors own publisher/viewer media-plane transitions', () 
   assert.ok(api.includes('/signal/ice'));
 
   assert.ok(service.includes('superseded_by_session_id'));
-  assert.ok(service.includes('existing.status in {"previewing", "recording"}'));
+  assert.ok(service.includes('STALE_LIVE_SESSION_STATUSES'));
+  assert.ok(service.includes('def prune_stale_sessions'));
+  assert.ok(service.includes('"waiting_for_answer"'));
+  assert.ok(service.includes('"connected"'));
   assert.ok(backendTest.includes('test_starting_second_live_session_supersedes_previous_active_same_node_source'));
 });
 
