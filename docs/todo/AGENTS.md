@@ -1,3 +1,10 @@
+## 2026-05-07 — Explorer WebRTC visible video surface patch (new)
+- [x] Routed decoded WebRTC `MediaStream` playback through a real visible `<video>` in the top Live preview whenever a remote stream or track exists, keeping chunk-preview `<img>` fallback only for non-WebRTC preview chunks.
+- [x] Added one shared viewer video callback ref that applies Safari-safe video attributes before assigning `srcObject`, reuses existing stream attachments, avoids `video.load()`, and keeps tap-to-play retry on the attached stream.
+- [x] Added render-surface diagnostics (`topPreviewUsesVideo`, mounted/layout/computed style fields, `decodedFramesRenderable`, and `renderSurfaceFailureReason`) so decoded-frame paint failures can be diagnosed without relying only on `videoWidth`/`videoHeight`.
+- [x] Updated Explorer static contracts to lock the visible top-preview video path, no-load invariant, decoded-frame renderability marker, peer video diagnostics, and non-dimension-only renderability classification.
+- [ ] Next validation item: on real Safari/iPhone, confirm `__explorerViewerPeerDebug.topPreviewUsesVideo=true`, `peerVideoMounted=true`, non-zero peer video layout dimensions, `decodedFramesRenderable=true`, and `mediaFailureClass=frames_rendering`.
+
 ## 2026-05-07 — WebRTC live preview RTP delivery before recording work (new)
 - [x] Added explicit publisher sendonly video/audio transceivers before offer creation and replaced tracks through transceiver senders instead of falling back to generic `addTrack(...)`.
 - [x] Added explicit Explorer viewer recvonly video/audio transceivers before applying the device offer so answer negotiation has stable receive m-lines.

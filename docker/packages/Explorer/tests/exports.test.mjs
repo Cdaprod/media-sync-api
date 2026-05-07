@@ -4184,8 +4184,26 @@ test('Safari WebRTC playback boundary preserves srcObject and samples RTP stats'
   const card = fs.readFileSync(cardPath, 'utf8');
   const device = fs.readFileSync(devicePath, 'utf8');
 
-  assert.ok(card.includes('attachRemoteStreamToVideo'));
-  assert.ok(card.includes('existingStreamId !== stream.id'));
+  assert.ok(card.includes('bindRemoteStreamToVideo'));
+  assert.ok(card.includes('if (newlyAssigned) {\n    video.srcObject = stream;'));
+  assert.ok(card.includes('video.srcObject !== stream'));
+  assert.ok(card.includes('video.controls = false'));
+  assert.ok(card.includes('const playPromise = video.play()'));
+  assert.ok(card.includes('LIVE_VIDEO_STYLE'));
+  assert.ok(card.includes('data-live-preview-video="true"'));
+  assert.ok(card.includes('topPreviewShouldUseVideo'));
+  assert.ok(card.includes('topPreviewUsesVideo'));
+  assert.ok(card.includes('decodedFramesRenderable'));
+  assert.ok(card.includes('peerVideoMounted'));
+  assert.ok(card.includes('peerVideoClientWidth'));
+  assert.ok(card.includes('peerVideoClientHeight'));
+  assert.ok(card.includes('peerVideoOffsetWidth'));
+  assert.ok(card.includes('peerVideoOffsetHeight'));
+  assert.ok(card.includes('peerVideoComputedDisplay'));
+  assert.ok(card.includes('peerVideoComputedVisibility'));
+  assert.ok(card.includes('peerVideoComputedOpacity'));
+  assert.ok(card.includes('renderSurfaceFailureReason'));
+  assert.ok(!card.includes("video.videoWidth > 0 && video.videoHeight > 0 ? 'frames_rendering'"));
   assert.ok(card.includes("video.setAttribute('playsinline', 'true')"));
   assert.ok(card.includes('lastSrcObjectAssignedAt'));
   assert.ok(!card.includes('.load()'));

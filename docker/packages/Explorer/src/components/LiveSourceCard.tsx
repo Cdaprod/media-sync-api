@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { createApiClient } from '../api';
 import type { WebRtcLiveSession } from '../contracts/live';
@@ -72,27 +72,73 @@ type ViewerMediaFailureClass =
   | 'playback_started_waiting_for_dimensions'
   | null;
 
-function attachRemoteStreamToVideo(video: HTMLVideoElement, stream: MediaStream, reason: string): boolean {
+const LIVE_VIDEO_STYLE: React.CSSProperties = {
+  display: 'block',
+  width: '100%',
+  minHeight: 180,
+  aspectRatio: '16 / 9',
+  objectFit: 'cover',
+  background: '#000',
+  opacity: 1,
+  visibility: 'visible',
+  borderRadius: 8,
+};
+
+function getViewerVideoSurfaceDebug(video: HTMLVideoElement | null, inboundVideoFramesDecoded = 0) {
+  const computed = typeof window !== 'undefined' && video ? window.getComputedStyle(video) : null;
+  const renderSurfaceFailureReason = !video
+    ? 'video_not_mounted'
+    : video.offsetWidth === 0 || video.offsetHeight === 0
+      ? 'video_zero_layout'
+      : computed?.display === 'none'
+        ? 'video_hidden'
+        : computed?.visibility === 'hidden' || computed?.visibility === 'collapse'
+          ? 'video_hidden'
+          : computed?.opacity === '0'
+            ? 'video_transparent'
+            : null;
+  return {
+    peerVideoMounted: Boolean(video),
+    peerVideoClientWidth: video?.clientWidth ?? 0,
+    peerVideoClientHeight: video?.clientHeight ?? 0,
+    peerVideoOffsetWidth: video?.offsetWidth ?? 0,
+    peerVideoOffsetHeight: video?.offsetHeight ?? 0,
+    peerVideoComputedDisplay: computed?.display ?? null,
+    peerVideoComputedVisibility: computed?.visibility ?? null,
+    peerVideoComputedOpacity: computed?.opacity ?? null,
+    decodedFramesRenderable: inboundVideoFramesDecoded > 0 && (video?.readyState ?? 0) >= 2,
+    renderSurfaceFailureReason,
+  };
+}
+
+function bindRemoteStreamToVideo(video: HTMLVideoElement | null, stream: MediaStream | null, reason = 'bind'): boolean {
+  if (!video || !stream) return false;
   video.muted = true;
   video.autoplay = true;
   video.playsInline = true;
+  video.controls = false;
   video.setAttribute('playsinline', 'true');
-  const existing = video.srcObject;
-  const existingStreamId = existing instanceof MediaStream ? existing.id : null;
-  const newlyAssigned = existingStreamId !== stream.id;
+  const newlyAssigned = video.srcObject !== stream;
   const assignedAt = newlyAssigned ? Date.now() : null;
   if (newlyAssigned) {
     video.srcObject = stream;
   }
+  const playPromise = video.play();
+  if (playPromise && typeof playPromise.catch === 'function') {
+    playPromise.catch(() => {
+      // Keep stream attached. Safari may require a tap retry.
+    });
+  }
   markExplorerViewerPeerDebug({
     attachRemoteStreamReason: reason,
-    videoSrcObjectSet: video.srcObject === stream || existingStreamId === stream.id,
+    videoSrcObjectSet: video.srcObject === stream,
     videoSrcObjectStreamId: stream.id,
     ...(assignedAt ? { lastSrcObjectAssignedAt: assignedAt } : {}),
     srcObjectReusedByStreamId: !newlyAssigned,
     videoMuted: video.muted,
     videoPlaysInline: video.playsInline,
     videoAutoplay: video.autoplay,
+    videoControls: video.controls,
   });
   return newlyAssigned;
 }
@@ -166,6 +212,8 @@ export function LiveSourceCard({
   const previewUrl = usePreviewUrl(apiBase, session.session_id, shouldPollChunkPreview);
   const imgRef = useRef<HTMLImageElement>(null);
   const peerVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
+  const remoteTrackCountRef = useRef(0);
   const peerConnRef = useRef<RTCPeerConnection | null>(null);
   const deviceIceReceivedKeysRef = useRef<Set<string>>(new Set());
   const appliedDeviceIceKeysRef = useRef<Set<string>>(new Set());
@@ -175,6 +223,7 @@ export function LiveSourceCard({
   const [peerEnabled, setPeerEnabled] = useState(autoStartPeer);
   useEffect(() => { if (autoStartPeer) setPeerEnabled(true); }, [autoStartPeer]);
   const [peerStream, setPeerStream] = useState<MediaStream | null>(null);
+  const [remoteTrackCountState, setRemoteTrackCountState] = useState(0);
   const [peerError, setPeerError] = useState<string | null>(null);
   const [peerStatus, setPeerStatus] = useState<ViewerPeerStatus>('idle');
   const [signalingStatus, setSignalingStatus] = useState<ViewerSignalingStatus>('idle');
@@ -201,9 +250,36 @@ export function LiveSourceCard({
   const onStaleSessionRef = useRef(onStaleSession);
   onRemoteStreamRef.current = onRemoteStream;
   onStaleSessionRef.current = onStaleSession;
+  remoteStreamRef.current = peerStream;
+  remoteTrackCountRef.current = remoteTrackCountState;
   const api = useMemo(() => createApiClient(apiBase), [apiBase]);
   const viewerId = viewerIdRef.current;
   const viewerActorKey = `${session.session_id}::${viewerId}::${peerRetryToken}`;
+  const viewerVideoRef = useCallback((video: HTMLVideoElement | null) => {
+    if (video) peerVideoRef.current = video;
+    const stream = remoteStreamRef.current;
+    const assigned = bindRemoteStreamToVideo(video, stream, 'callback-ref');
+    if (assigned) lastSrcObjectAssignedAtRef.current = Date.now();
+    const inboundVideoFramesDecoded = Number(latestInboundVideoStatsRef.current.inboundVideoFramesDecoded || 0);
+    markExplorerViewerPeerDebug({
+      topPreviewUsesVideo: Boolean(video && (stream || remoteTrackCountRef.current > 0)),
+      ...getViewerVideoSurfaceDebug(video, inboundVideoFramesDecoded),
+    });
+  }, []);
+
+  useEffect(() => {
+    remoteStreamRef.current = peerStream;
+    remoteTrackCountRef.current = remoteTrackCountState;
+    const video = peerVideoRef.current;
+    if (!video || !peerStream) return;
+    const assigned = bindRemoteStreamToVideo(video, peerStream, 'stream-state');
+    if (assigned) lastSrcObjectAssignedAtRef.current = Date.now();
+    const inboundVideoFramesDecoded = Number(latestInboundVideoStatsRef.current.inboundVideoFramesDecoded || 0);
+    markExplorerViewerPeerDebug({
+      topPreviewUsesVideo: Boolean(peerStream || remoteTrackCountRef.current > 0),
+      ...getViewerVideoSurfaceDebug(video, inboundVideoFramesDecoded),
+    });
+  }, [peerStream]);
   const publishViewerState = (state: ViewerPeerStatus, diagnostic?: string | null, lanes?: { signaling?: ViewerSignalingStatus; media?: ViewerMediaStatus; playback?: ViewerPlaybackStatus; ice?: ViewerIceStatus }) => {
     lastStableStateRef.current = state;
     setPeerStatus(state);
@@ -291,6 +367,8 @@ export function LiveSourceCard({
       latestInboundVideoStatsRef.current = {};
       StreamHub.delete(sessionId);
       setPeerStream(null);
+      setRemoteTrackCountState(0);
+      remoteTrackCountRef.current = 0;
       setFailure('stale_session_not_found', 'Live session no longer exists. Refreshing live sessions.');
       markExplorerLiveFlowDebug({
         staleSessionDroppedAt: Date.now(),
@@ -448,17 +526,18 @@ export function LiveSourceCard({
       const framesDecoded = Number(stats.inboundVideoFramesDecoded || 0);
       const videoWidth = video?.videoWidth || 0;
       const videoHeight = video?.videoHeight || 0;
+      const decodedFramesRenderable = framesDecoded > 0 && (video?.readyState ?? 0) >= 2;
       const rejectedName = typeof stats.videoPlayRejectedName === 'string' ? stats.videoPlayRejectedName : null;
       const elapsedSinceTrack = remoteTrackAttachedAtRef.current ? Date.now() - remoteTrackAttachedAtRef.current : 0;
       const elapsedSinceSrcObject = lastSrcObjectAssignedAtRef.current ? Date.now() - lastSrcObjectAssignedAtRef.current : Number.POSITIVE_INFINITY;
       let next: ViewerMediaFailureClass = mediaFailureClass;
-      if (videoWidth > 0 && videoHeight > 0) next = 'frames_rendering';
+      if (decodedFramesRenderable || (videoWidth > 0 && videoHeight > 0)) next = 'frames_rendering';
       else if (rejectedName === 'AbortError' && elapsedSinceSrcObject <= 1000) next = 'video_play_interrupted_by_srcobject_reset';
       else if (framesDecoded > 0 && rejectedName) next = 'frames_decoded_but_video_play_rejected';
       else if (bytes > 0 && framesDecoded <= 0 && elapsedSinceTrack >= 3000) next = 'rtp_receiving_but_no_frames_decoded';
       else if (remoteTrackAttachedAtRef.current && bytes <= 0 && elapsedSinceTrack >= 3000) next = 'track_attached_but_no_rtp';
       if (next !== mediaFailureClass) setMediaFailureClass(next);
-      markExplorerViewerPeerDebug({ mediaFailureClass: next, ...stats });
+      markExplorerViewerPeerDebug({ mediaFailureClass: next, ...stats, ...getViewerVideoSurfaceDebug(video, framesDecoded) });
       return next;
     };
 
@@ -515,6 +594,7 @@ export function LiveSourceCard({
         videoWidth: video?.videoWidth ?? 0,
         videoHeight: video?.videoHeight ?? 0,
         lastSrcObjectAssignedAt: lastSrcObjectAssignedAtRef.current,
+        ...getViewerVideoSurfaceDebug(video, Number(latestInboundVideoStatsRef.current.inboundVideoFramesDecoded || 0)),
         ...summarizePeerReceivers(activePeer),
         ...summarizePeerTransceivers(activePeer),
         ...latestInboundVideoStatsRef.current,
@@ -522,7 +602,7 @@ export function LiveSourceCard({
     };
 
     const attemptPlayAttachedStream = async (video: HTMLVideoElement, stream: MediaStream, source: 'ontrack' | 'tap') => {
-      attachRemoteStreamToVideo(video, stream, `play-${source}`);
+      bindRemoteStreamToVideo(video, stream, `play-${source}`);
       const liveVideoTrackCount = stream.getVideoTracks().filter((track) => track.readyState === 'live').length;
       const readyStateBeforePlay = video.readyState;
       markExplorerViewerPeerDebug({
@@ -543,7 +623,7 @@ export function LiveSourceCard({
       try {
         await video.play();
         if (disposed) return;
-        const nextFailureClass: ViewerMediaFailureClass = video.videoWidth > 0 && video.videoHeight > 0 ? 'frames_rendering' : 'playback_started_waiting_for_dimensions';
+        const nextFailureClass = classifyMediaFailure();
         setMediaFailureClass(nextFailureClass);
         setShowTapToPlay(false);
         publishViewerState('playing', 'remote-track-playing', { media: 'track_attached', playback: 'playing' });
@@ -608,11 +688,14 @@ export function LiveSourceCard({
       const streamId = stream.id;
       const liveVideoTrackCount = stream.getVideoTracks().filter((track) => track.readyState === 'live').length;
       remoteTrackCount += event.track ? 1 : stream.getTracks().length;
+      setRemoteTrackCountState(remoteTrackCount);
+      remoteTrackCountRef.current = remoteTrackCount;
+      remoteStreamRef.current = stream;
       StreamHub.set(sessionId, stream);
       let videoSrcObjectSet = false;
       const video = peerVideoRef.current;
       if (video) {
-        const assigned = attachRemoteStreamToVideo(video, stream, 'ontrack');
+        const assigned = bindRemoteStreamToVideo(video, stream, 'ontrack');
         if (assigned) lastSrcObjectAssignedAtRef.current = Date.now();
         remoteTrackAttachedAtRef.current = Date.now();
         setMediaFailureClass(null);
@@ -635,9 +718,16 @@ export function LiveSourceCard({
         video.onplaying = () => markExplorerViewerPeerDebug({ videoPlayingAt: Date.now(), videoReadyState: video.readyState, failureReason: null });
         void attemptPlayAttachedStream(video, stream, 'ontrack');
       } else {
-        setMediaStatus('video_src_object_not_set');
-        setFailure('video_src_object_not_set', 'Live viewer video element is unavailable.');
-        markExplorerViewerPeerDebug({ failureReason: 'video_src_object_not_set' });
+        setPeerStatus('track_attached');
+        publishViewerState('track_attached', 'track_attached', { media: 'track_attached', playback: 'waiting_for_play' });
+        markExplorerViewerPeerDebug({
+          remoteStreamId: streamId,
+          videoSrcObjectSet: false,
+          remoteTrackCount,
+          liveVideoTrackCount,
+          failureReason: null,
+          ...getViewerVideoSurfaceDebug(null, Number(latestInboundVideoStatsRef.current.inboundVideoFramesDecoded || 0)),
+        });
       }
       setPeerStream(stream);
       markExplorerLiveFlowDebug({
@@ -848,6 +938,8 @@ export function LiveSourceCard({
       latestInboundVideoStatsRef.current = {};
       StreamHub.delete(sessionId);
       setPeerStream(null);
+      setRemoteTrackCountState(0);
+      remoteTrackCountRef.current = 0;
       setPeerDiagnostic(null);
       setShowTapToPlay(false);
       setSignalingStatus('idle');
@@ -860,7 +952,8 @@ export function LiveSourceCard({
   }, [api, isActive, peerEnabled, peerRetryToken, session.session_id]);
 
 
-  const liveVideoRendering = mediaFailureClass === 'frames_rendering' || (playbackStatus === 'playing' && peerVideoRef.current && peerVideoRef.current.videoWidth > 0 && peerVideoRef.current.videoHeight > 0);
+  const liveVideoRendering = mediaFailureClass === 'frames_rendering' || (playbackStatus === 'playing' && Number(latestInboundVideoStatsRef.current.inboundVideoFramesDecoded || 0) > 0 && (peerVideoRef.current?.readyState ?? 0) >= 2);
+  const topPreviewShouldUseVideo = Boolean(peerStream || remoteTrackCountState > 0);
 
   const livePreviewLabel = !isActive ? 'no active session'
     : session.status === 'ended' ? 'session ended'
@@ -890,20 +983,37 @@ export function LiveSourceCard({
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
       {isActive ? (
-        <div style={{ position: 'relative', background: '#000', aspectRatio: '16/9' }}>
-          <img
-            ref={imgRef}
-            alt="Live preview"
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              display: 'block',
-            }}
-          />
-          {!shouldPollChunkPreview ? (
-            <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: 'rgba(255,255,255,0.8)', fontSize: 12, fontFamily: 'var(--mono)' }}>
+        <div style={{ position: 'relative', background: '#000', aspectRatio: '16/9', minHeight: topPreviewShouldUseVideo ? 180 : undefined }}>
+          {topPreviewShouldUseVideo ? (
+            <video
+              ref={viewerVideoRef}
+              autoPlay
+              muted
+              playsInline
+              controls={false}
+              style={LIVE_VIDEO_STYLE}
+              data-live-preview-video="true"
+              data-viewer-actor-key={viewerActorKey}
+            />
+          ) : shouldPollChunkPreview ? (
+            <img
+              ref={imgRef}
+              alt="Live preview"
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block',
+              }}
+            />
+          ) : (
+            <div className="live-preview-status" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: 'rgba(255,255,255,0.8)', fontSize: 12, fontFamily: 'var(--mono)' }}>
               {livePreviewLabel}
+            </div>
+          )}
+          {topPreviewShouldUseVideo ? (
+            <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', pointerEvents: 'none', color: 'rgba(255,255,255,0.8)', fontSize: 12, fontFamily: 'var(--mono)', textShadow: '0 1px 3px #000' }}>
+              {liveVideoRendering ? null : livePreviewLabel}
             </div>
           ) : null}
           {session.status === 'recording' ? (
@@ -1003,7 +1113,7 @@ export function LiveSourceCard({
         ) : null}
         {peerEnabled ? (
           <div style={{ marginTop: 8 }}>
-            <video data-viewer-actor-key={viewerActorKey} ref={peerVideoRef} autoPlay playsInline muted controls={showTapToPlay} style={{ width: '100%', borderRadius: 8, background: '#000' }} />
+            <video data-viewer-actor-key={viewerActorKey} ref={viewerVideoRef} autoPlay playsInline muted controls={false} style={LIVE_VIDEO_STYLE} data-peer-preview-video="true" />
             <div className="small" style={{ marginTop: 6 }}>viewer: {peerStatus}</div>
             <div className="small" style={{ marginTop: 4 }}>signaling: {signalingStatus} · media: {mediaStatus} · playback: {playbackStatus} · ice: {iceStatus}</div>
             {showTapToPlay ? (
@@ -1015,9 +1125,9 @@ export function LiveSourceCard({
                   const video = peerVideoRef.current;
                   const stream = peerStream;
                   if (video && stream) {
-                    attachRemoteStreamToVideo(video, stream, 'tap-retry');
+                    bindRemoteStreamToVideo(video, stream, 'tap-retry');
                     void video.play().then(() => {
-                      const nextFailureClass: ViewerMediaFailureClass = video.videoWidth > 0 && video.videoHeight > 0 ? 'frames_rendering' : 'playback_started_waiting_for_dimensions';
+                      const nextFailureClass = classifyMediaFailure();
                       setMediaFailureClass(nextFailureClass);
                       setShowTapToPlay(false);
                       publishViewerState('playing', 'remote-track-playing', { playback: 'playing', media: 'track_attached' });
