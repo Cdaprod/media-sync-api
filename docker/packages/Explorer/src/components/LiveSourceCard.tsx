@@ -70,6 +70,8 @@ type ViewerMediaFailureClass =
   | 'video_play_interrupted_by_srcobject_reset'
   | 'frames_rendering'
   | 'playback_started_waiting_for_dimensions'
+  | 'receiver_video_not_in_composite_stream'
+  | 'video_receiver_exists_but_no_inbound_rtp'
   | null;
 
 const LIVE_VIDEO_STYLE: React.CSSProperties = {
@@ -213,6 +215,7 @@ export function LiveSourceCard({
   const imgRef = useRef<HTMLImageElement>(null);
   const peerVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
+  const remoteCompositeStreamRef = useRef<MediaStream | null>(null);
   const remoteTrackCountRef = useRef(0);
   const peerConnRef = useRef<RTCPeerConnection | null>(null);
   const deviceIceReceivedKeysRef = useRef<Set<string>>(new Set());
@@ -362,6 +365,8 @@ export function LiveSourceCard({
       viewerActorTeardownCountRef.current += 1;
       markExplorerViewerPeerDebug({ activePeerCount: 0, teardownCount: viewerActorTeardownCountRef.current, restartReason: 'actor-cleanup' });
       if (peerVideoRef.current) peerVideoRef.current.srcObject = null;
+      remoteCompositeStreamRef.current = null;
+      remoteStreamRef.current = null;
       lastSrcObjectAssignedAtRef.current = null;
       remoteTrackAttachedAtRef.current = null;
       latestInboundVideoStatsRef.current = {};
@@ -392,12 +397,16 @@ export function LiveSourceCard({
     }
     let consecutiveFails = 0;
     let remoteTrackCount = 0;
+    remoteCompositeStreamRef.current = new MediaStream();
+    remoteStreamRef.current = remoteCompositeStreamRef.current;
     answerPostedRef.current = false;
     stickyOfferSeenRef.current = false;
     viewerActorCreatedAtRef.current = Date.now();
     const peer = new RTCPeerConnection();
-    peer.addTransceiver('video', { direction: 'recvonly' });
-    peer.addTransceiver('audio', { direction: 'recvonly' });
+    const ensureRecvonlyTransceiver = (kind: 'video' | 'audio') => {
+      const hasRecvonlyForKind = peer.getTransceivers().some((transceiver) => transceiver.receiver?.track?.kind === kind);
+      if (!hasRecvonlyForKind) peer.addTransceiver(kind, { direction: 'recvonly' });
+    };
     peerConnRef.current = peer;
     deviceIceReceivedKeysRef.current.clear();
     appliedDeviceIceKeysRef.current.clear();
@@ -527,11 +536,15 @@ export function LiveSourceCard({
       const videoWidth = video?.videoWidth || 0;
       const videoHeight = video?.videoHeight || 0;
       const decodedFramesRenderable = framesDecoded > 0 && (video?.readyState ?? 0) >= 2;
+      const compositeVideoTrackCount = remoteCompositeStreamRef.current?.getVideoTracks().filter((track) => track.readyState !== 'ended').length || 0;
+      const receiverHasVideo = peerConnRef.current?.getReceivers().some((receiver) => receiver.track?.kind === 'video' && receiver.track.readyState !== 'ended') || false;
       const rejectedName = typeof stats.videoPlayRejectedName === 'string' ? stats.videoPlayRejectedName : null;
       const elapsedSinceTrack = remoteTrackAttachedAtRef.current ? Date.now() - remoteTrackAttachedAtRef.current : 0;
       const elapsedSinceSrcObject = lastSrcObjectAssignedAtRef.current ? Date.now() - lastSrcObjectAssignedAtRef.current : Number.POSITIVE_INFINITY;
       let next: ViewerMediaFailureClass = mediaFailureClass;
       if (decodedFramesRenderable || (videoWidth > 0 && videoHeight > 0)) next = 'frames_rendering';
+      else if (receiverHasVideo && compositeVideoTrackCount <= 0) next = 'receiver_video_not_in_composite_stream';
+      else if (compositeVideoTrackCount > 0 && bytes <= 0 && elapsedSinceTrack >= 1000) next = 'video_receiver_exists_but_no_inbound_rtp';
       else if (rejectedName === 'AbortError' && elapsedSinceSrcObject <= 1000) next = 'video_play_interrupted_by_srcobject_reset';
       else if (framesDecoded > 0 && rejectedName) next = 'frames_decoded_but_video_play_rejected';
       else if (bytes > 0 && framesDecoded <= 0 && elapsedSinceTrack >= 3000) next = 'rtp_receiving_but_no_frames_decoded';
@@ -541,12 +554,87 @@ export function LiveSourceCard({
       return next;
     };
 
+    const getRemoteCompositeStream = (): MediaStream => {
+      if (!remoteCompositeStreamRef.current) remoteCompositeStreamRef.current = new MediaStream();
+      return remoteCompositeStreamRef.current;
+    };
+
+    const reconcileRemoteReceiverTracks = (pc: RTCPeerConnection, reason: string): MediaStream => {
+      const composite = getRemoteCompositeStream();
+      for (const receiver of pc.getReceivers()) {
+        const track = receiver.track;
+        if (!track || track.readyState === 'ended') continue;
+        if (!composite.getTracks().some((existing) => existing.id === track.id)) {
+          composite.addTrack(track);
+        }
+      }
+      const compositeTracks = composite.getTracks();
+      const compositeVideoTracks = composite.getVideoTracks();
+      const compositeAudioTracks = composite.getAudioTracks();
+      remoteTrackCount = compositeTracks.length;
+      remoteStreamRef.current = composite;
+      remoteTrackCountRef.current = remoteTrackCount;
+      setRemoteTrackCountState(remoteTrackCount);
+      setPeerStream(composite);
+      if (compositeTracks.length > 0) {
+        remoteTrackAttachedAtRef.current = remoteTrackAttachedAtRef.current || Date.now();
+        StreamHub.set(sessionId, composite);
+      }
+      const video = peerVideoRef.current;
+      let assigned = false;
+      if (video && compositeTracks.length > 0) {
+        assigned = bindRemoteStreamToVideo(video, composite, reason);
+        if (assigned) lastSrcObjectAssignedAtRef.current = Date.now();
+      }
+      const receivers = pc.getReceivers();
+      const receiverTracks = receivers.map((receiver) => receiver.track).filter(Boolean) as MediaStreamTrack[];
+      const receiverTrackKinds = receiverTracks.map((track) => track.kind);
+      const receiverTrackIds = receiverTracks.map((track) => track.id);
+      const receiverLiveVideoTrackCount = receiverTracks.filter((track) => track.kind === 'video' && track.readyState !== 'ended').length;
+      const receiverEndedVideoTrackCount = receiverTracks.filter((track) => track.kind === 'video' && track.readyState === 'ended').length;
+      const receiverVideoMissingFromComposite = receiverTrackKinds.includes('video') && compositeVideoTracks.length === 0;
+      const videoReceiverNoInboundRtp = compositeVideoTracks.length > 0 && Number(latestInboundVideoStatsRef.current.inboundVideoBytesReceived || 0) <= 0;
+      const nextDiagnostic = receiverVideoMissingFromComposite
+        ? 'receiver_video_not_in_composite_stream'
+        : videoReceiverNoInboundRtp
+          ? 'video_receiver_exists_but_no_inbound_rtp'
+          : null;
+      if (nextDiagnostic) setPeerDiagnostic(nextDiagnostic);
+      if (compositeTracks.length > 0) {
+        setMediaStatus('track_attached');
+        setPeerStatus('track_attached');
+      }
+      markExplorerViewerPeerDebug({
+        remoteTrackAttachReason: reason,
+        remoteStreamId: composite.id,
+        remoteTrackCount,
+        remoteVideoTrackCount: compositeVideoTracks.length,
+        remoteAudioTrackCount: compositeAudioTracks.length,
+        remoteCompositeTrackCount: compositeTracks.length,
+        remoteCompositeVideoTrackCount: compositeVideoTracks.length,
+        remoteCompositeAudioTrackCount: compositeAudioTracks.length,
+        remoteCompositeTrackIds: compositeTracks.map((track) => track.id),
+        receiverTrackKinds,
+        receiverTrackIds,
+        receiverLiveVideoTrackCount,
+        receiverEndedVideoTrackCount,
+        liveVideoTrackCount: compositeVideoTracks.filter((track) => track.readyState === 'live').length,
+        videoSrcObjectSet: video?.srcObject === composite,
+        lastSrcObjectAssignedAt: lastSrcObjectAssignedAtRef.current,
+        receiver_video_not_in_composite_stream: receiverVideoMissingFromComposite,
+        video_receiver_exists_but_no_inbound_rtp: videoReceiverNoInboundRtp,
+        ...(nextDiagnostic ? { mediaFailureClass: nextDiagnostic } : {}),
+        ...getViewerVideoSurfaceDebug(video, Number(latestInboundVideoStatsRef.current.inboundVideoFramesDecoded || 0)),
+      });
+      return composite;
+    };
+
     const sampleInboundRtpStats = async () => {
       if (disposed || !peerConnRef.current) return;
       const activePeer = peerConnRef.current;
+      const composite = reconcileRemoteReceiverTracks(activePeer, 'stats-poll');
       const video = peerVideoRef.current;
-      const stream = peerStream || (video?.srcObject instanceof MediaStream ? video.srcObject : null);
-      const remoteTracks = stream?.getTracks() || activePeer.getReceivers().map((receiver) => receiver.track).filter(Boolean) as MediaStreamTrack[];
+      const remoteTracks = composite.getTracks();
       const remoteVideoTrack = remoteTracks.find((track) => track.kind === 'video') || null;
       let inboundPatch: Record<string, unknown> = {};
       try {
@@ -570,6 +658,7 @@ export function LiveSourceCard({
         markExplorerViewerPeerDebug({ inboundStatsError: error instanceof Error ? error.message : String(error) });
       }
       latestInboundVideoStatsRef.current = { ...latestInboundVideoStatsRef.current, ...inboundPatch };
+      reconcileRemoteReceiverTracks(activePeer, 'stats-poll-after-inbound');
       classifyMediaFailure(inboundPatch);
       markExplorerViewerPeerDebug({
         sessionId,
@@ -678,32 +767,26 @@ export function LiveSourceCard({
     };
 
     peer.ontrack = (event) => {
-      const stream = event.streams?.[0] || (event.track ? new MediaStream([event.track]) : null);
-      if (!stream) {
+      const composite = getRemoteCompositeStream();
+      if (event.track && event.track.readyState !== 'ended' && !composite.getTracks().some((existing) => existing.id === event.track.id)) {
+        composite.addTrack(event.track);
+      }
+      const stream = reconcileRemoteReceiverTracks(peer, 'ontrack');
+      const liveVideoTrackCount = stream.getVideoTracks().filter((track) => track.readyState === 'live').length;
+      const video = peerVideoRef.current;
+      const videoSrcObjectSet = Boolean(video && video.srcObject === stream);
+      if (stream.getTracks().length <= 0) {
         setMediaStatus('remote_track_not_emitted');
         setPeerDiagnostic('remote_track_not_emitted');
         markExplorerViewerPeerDebug({ failureReason: 'remote_track_not_emitted', remoteTrackEventWithoutStream: true });
         return;
       }
-      const streamId = stream.id;
-      const liveVideoTrackCount = stream.getVideoTracks().filter((track) => track.readyState === 'live').length;
-      remoteTrackCount += event.track ? 1 : stream.getTracks().length;
-      setRemoteTrackCountState(remoteTrackCount);
-      remoteTrackCountRef.current = remoteTrackCount;
-      remoteStreamRef.current = stream;
-      StreamHub.set(sessionId, stream);
-      let videoSrcObjectSet = false;
-      const video = peerVideoRef.current;
+      remoteTrackAttachedAtRef.current = remoteTrackAttachedAtRef.current || Date.now();
+      setMediaFailureClass(null);
+      publishViewerState('track_attached', 'track_attached', { media: 'track_attached', playback: 'waiting_for_play' });
       if (video) {
-        const assigned = bindRemoteStreamToVideo(video, stream, 'ontrack');
-        if (assigned) lastSrcObjectAssignedAtRef.current = Date.now();
-        remoteTrackAttachedAtRef.current = Date.now();
-        setMediaFailureClass(null);
-        videoSrcObjectSet = true;
-        setPeerStatus('track_attached');
-        publishViewerState('track_attached', 'track_attached', { media: 'track_attached', playback: 'waiting_for_play' });
         markExplorerViewerPeerDebug({
-          remoteStreamId: streamId,
+          remoteStreamId: stream.id,
           videoSrcObjectSet: true,
           remoteTrackCount,
           liveVideoTrackCount,
@@ -717,30 +800,18 @@ export function LiveSourceCard({
         video.oncanplay = () => markExplorerViewerPeerDebug({ videoCanPlayAt: Date.now(), videoReadyState: video.readyState });
         video.onplaying = () => markExplorerViewerPeerDebug({ videoPlayingAt: Date.now(), videoReadyState: video.readyState, failureReason: null });
         void attemptPlayAttachedStream(video, stream, 'ontrack');
-      } else {
-        setPeerStatus('track_attached');
-        publishViewerState('track_attached', 'track_attached', { media: 'track_attached', playback: 'waiting_for_play' });
-        markExplorerViewerPeerDebug({
-          remoteStreamId: streamId,
-          videoSrcObjectSet: false,
-          remoteTrackCount,
-          liveVideoTrackCount,
-          failureReason: null,
-          ...getViewerVideoSurfaceDebug(null, Number(latestInboundVideoStatsRef.current.inboundVideoFramesDecoded || 0)),
-        });
       }
-      setPeerStream(stream);
       markExplorerLiveFlowDebug({
         watchLiveSessionId: sessionId,
         viewerId,
         remoteTrackCount,
-        remoteStreamId: streamId,
+        remoteStreamId: stream.id,
         liveVideoTrackCount,
         videoSrcObjectSet,
         mediaStatus: videoSrcObjectSet ? 'track_attached' : 'video_src_object_not_set',
         failureReason: null,
       });
-      markExplorerViewerPeerDebug({ remoteTrackCount, remoteStreamId: streamId, liveVideoTrackCount, videoSrcObjectSet, failureReason: null, mediaFailureClass: null });
+      markExplorerViewerPeerDebug({ remoteTrackCount, remoteStreamId: stream.id, liveVideoTrackCount, videoSrcObjectSet, failureReason: null, mediaFailureClass: null });
       void sampleInboundRtpStats();
       onRemoteStreamRef.current?.(sessionRef.current, stream);
     };
@@ -789,6 +860,7 @@ export function LiveSourceCard({
       });
       if (confirmed) {
         publishViewerState('answer_confirmed', 'answer_confirmed', { signaling: 'answer_confirmed', media: 'waiting_for_track' });
+        if (peerConnRef.current) reconcileRemoteReceiverTracks(peerConnRef.current, 'answer-confirmed');
         markExplorerViewerPeerDebug({ answerConfirmedAt: Date.now(), failureReason: null });
       }
       if (!confirmed) {
@@ -830,8 +902,13 @@ export function LiveSourceCard({
             publishViewerState('answer_publishing', 'set-remote-description', { signaling: 'answer_publishing' });
             markExplorerLiveFlowDebug({ viewerStatus: 'answer_publishing' });
             try {
-              markExplorerViewerPeerDebug({ offerSeenAt: Date.now(), stickyOfferSeen: true, offerVideoDirection: extractMediaDirection(signal.offer.sdp || '', 'video'), offerAudioDirection: extractMediaDirection(signal.offer.sdp || '', 'audio') });
+              const offerVideoDirection = extractMediaDirection(signal.offer.sdp || '', 'video');
+              const offerAudioDirection = extractMediaDirection(signal.offer.sdp || '', 'audio');
+              if (!offerVideoDirection) ensureRecvonlyTransceiver('video');
+              if (!offerAudioDirection) ensureRecvonlyTransceiver('audio');
+              markExplorerViewerPeerDebug({ offerSeenAt: Date.now(), stickyOfferSeen: true, offerVideoDirection, offerAudioDirection });
               await peerConnRef.current.setRemoteDescription(new RTCSessionDescription(signal.offer));
+              reconcileRemoteReceiverTracks(peerConnRef.current, 'set-remote-description');
               await flushQueuedDeviceIce();
             } catch (error) {
               setFailure('set_remote_description_failed', 'Live viewer failed to apply device offer.');
@@ -933,6 +1010,8 @@ export function LiveSourceCard({
       viewerActorTeardownCountRef.current += 1;
       markExplorerViewerPeerDebug({ activePeerCount: 0, teardownCount: viewerActorTeardownCountRef.current, restartReason: 'actor-cleanup' });
       if (peerVideoRef.current) peerVideoRef.current.srcObject = null;
+      remoteCompositeStreamRef.current = null;
+      remoteStreamRef.current = null;
       lastSrcObjectAssignedAtRef.current = null;
       remoteTrackAttachedAtRef.current = null;
       latestInboundVideoStatsRef.current = {};

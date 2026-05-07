@@ -4206,6 +4206,26 @@ test('Safari WebRTC playback boundary preserves srcObject and samples RTP stats'
   assert.ok(card.includes('peerVideoComputedVisibility'));
   assert.ok(card.includes('peerVideoComputedOpacity'));
   assert.ok(card.includes('renderSurfaceFailureReason'));
+  assert.ok(card.includes('remoteCompositeStreamRef'));
+  assert.ok(card.includes('reconcileRemoteReceiverTracks'));
+  assert.ok(!card.includes('event.streams?.[0]'));
+  assert.ok(card.includes('getTransceivers().some'));
+  assert.ok(card.includes('hasRecvonlyForKind'));
+  assert.ok(card.includes('receiver_video_not_in_composite_stream'));
+  assert.ok(card.includes('video_receiver_exists_but_no_inbound_rtp'));
+  for (const field of [
+    'remoteCompositeTrackCount',
+    'remoteCompositeVideoTrackCount',
+    'remoteCompositeAudioTrackCount',
+    'remoteCompositeTrackIds',
+    'receiverTrackKinds',
+    'receiverTrackIds',
+    'receiverLiveVideoTrackCount',
+    'receiverEndedVideoTrackCount',
+    'remoteTrackAttachReason',
+  ]) {
+    assert.ok(card.includes(field), `LiveSourceCard missing ${field}`);
+  }
   assert.ok(!card.includes("video.videoWidth > 0 && video.videoHeight > 0 ? 'frames_rendering'"));
   assert.ok(card.includes("video.setAttribute('playsinline', 'true')"));
   assert.ok(card.includes('lastSrcObjectAssignedAt'));
@@ -4275,8 +4295,11 @@ test('WebRTC live preview uses explicit transceiver directions and SDP diagnosti
   assert.ok(device.includes('outboundVideoFramesEncoded'));
   assert.ok(device.includes('outboundVideoBytesSent'));
 
-  assert.ok(card.includes("peer.addTransceiver('video', { direction: 'recvonly' })") || card.includes('peer.addTransceiver("video", { direction: "recvonly" })'));
-  assert.ok(card.includes("peer.addTransceiver('audio', { direction: 'recvonly' })") || card.includes('peer.addTransceiver("audio", { direction: "recvonly" })'));
+  assert.ok(card.includes("peer.addTransceiver(kind, { direction: 'recvonly' })"));
+  assert.ok(card.includes('ensureRecvonlyTransceiver'));
+  assert.ok(card.includes('hasRecvonlyForKind'));
+  assert.ok(card.includes("if (!offerVideoDirection) ensureRecvonlyTransceiver('video')"));
+  assert.ok(card.includes("if (!offerAudioDirection) ensureRecvonlyTransceiver('audio')"));
   assert.ok(card.includes('offerVideoDirection'));
   assert.ok(card.includes('answerVideoDirection'));
   assert.ok(card.includes('receiverKinds'));

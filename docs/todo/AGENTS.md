@@ -1,3 +1,10 @@
+## 2026-05-07 — Explorer WebRTC viewer composite stream assembly (new)
+- [x] Changed `LiveSourceCard` viewer media authority to maintain one actor-owned composite `MediaStream` and reconcile it from `RTCPeerConnection.getReceivers()` plus `ontrack`, instead of trusting `event.streams[0]` as preview source truth.
+- [x] Rebound top preview and peer video surfaces from the composite stream across `setRemoteDescription`, `ontrack`, answer confirmation, and RTP stats polling so audio-only partial streams cannot replace the displayed video stream.
+- [x] Guarded viewer recvonly transceiver creation by missing media kind and only adds fallback recvonly transceivers when the incoming offer lacks that media section, preventing duplicate video/audio receiver pairs after remote offer application.
+- [x] Added diagnostics for composite track counts/ids, receiver track kinds/ids, live/ended video receiver counts, attach reason, `receiver_video_not_in_composite_stream`, and `video_receiver_exists_but_no_inbound_rtp`.
+- [ ] Next validation item: on the real iPhone + Explorer flow, confirm `remoteCompositeVideoTrackCount > 0`, `liveVideoTrackCount > 0`, `inboundVideoBytesReceived > 0`, and `inboundVideoFramesDecoded > 0` with no duplicate viewer receiver pairs.
+
 ## 2026-05-07 — WebRTC stale live-session pruning + rendered-frame success gate (new)
 - [x] Added `LiveSessionService.prune_stale_sessions(...)` to end active preview/recording/waiting/connected sessions whose heartbeat exceeds the live-session TTL and clear their signal state without resurrecting superseded sessions.
 - [x] Wired stale-session pruning through durable live-session list/start routes and WebRTC `/api/live` listing so stale durable sessions remove their bridged WebRTC runtime entries.
