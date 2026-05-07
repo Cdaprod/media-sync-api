@@ -615,6 +615,11 @@ test('explorer separates durable live sessions from runtime viewer events', () =
   assert.ok(app.includes('const canonicalLiveSessions = useMemo<LiveSession[]>'));
   assert.ok(app.includes('if (!isDurableLiveSessionRecord(session)) continue;'));
   assert.ok(!app.includes("origin: 'webrtc-live-session'"), 'WebRTC overlays must not synthesize durable LiveSession records');
+  assert.ok(app.includes('const durableLiveSessionIds = useMemo'));
+  assert.ok(app.includes('!durableLiveSessionIds.has(session.session_id)'));
+  assert.ok(app.includes('webRtcOnlyOfferSessions'));
+  assert.ok(app.includes('webRtcOnlyOffersDiagnosticOnly: true'));
+  assert.ok(app.includes('signalAnnotatedDurableSessionIds: Array.from(livePanelSignalBySessionId.keys())'));
   assert.ok(app.includes('setLiveRuntimeEventsBySessionId'));
   assert.ok(app.includes('if (isLiveRuntimeEventPayload(payload))'));
   assert.ok(app.includes('} else if (isDurableLiveSessionRecord(payload))'));
@@ -4205,6 +4210,33 @@ test('live session canonical selector rejects runtime overlays and preserves off
   assert.ok(content.includes('candidates.sort'));
 });
 
+test('Explorer does not render WebRTC-only offers as durable LiveSourceCard sessions', () => {
+  const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
+  const explorer = fs.readFileSync(explorerPath, 'utf8');
+  const signalStart = explorer.indexOf('const livePanelSignalBySessionId = useMemo');
+  const signalEnd = explorer.indexOf('const webRtcOnlyOfferSessions = useMemo', signalStart);
+  assert.ok(signalStart >= 0 && signalEnd > signalStart);
+  const signalBlock = explorer.slice(signalStart, signalEnd);
+  assert.ok(signalBlock.includes('durableLiveSessionIds.has(session.session_id)'));
+  assert.ok(!signalBlock.includes('}, [webRtcLiveSessions]'));
+
+  const livePanelStart = explorer.indexOf('const livePanelSessions = useMemo<LiveSession[]>');
+  const livePanelEnd = explorer.indexOf('const runtimeEventSessionIds = useMemo', livePanelStart);
+  assert.ok(livePanelStart >= 0 && livePanelEnd > livePanelStart);
+  const livePanelBlock = explorer.slice(livePanelStart, livePanelEnd);
+  assert.ok(livePanelBlock.includes('primaryLiveSelectionByNodeSource'));
+  assert.ok(!livePanelBlock.includes('webRtcLiveSessions'));
+  assert.ok(!livePanelBlock.includes('webRtcOnlyOfferSessions'));
+
+  const renderStart = explorer.indexOf('{livePanelSessions.map((session)');
+  const renderEnd = explorer.indexOf('/>', explorer.indexOf('<LiveSourceCard', renderStart));
+  assert.ok(renderStart >= 0 && renderEnd > renderStart);
+  const renderBlock = explorer.slice(renderStart, renderEnd);
+  assert.ok(renderBlock.includes('<LiveSourceCard'));
+  assert.ok(!renderBlock.includes('webRtcOnlyOfferSessions'));
+  assert.ok(explorer.includes('webRtcOnlyOffersDiagnosticOnly: true'));
+});
+
 test('live panels and device instances share canonical session selection', () => {
   const explorerPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const deviceInstancesPath = path.join(packageRoot, 'src', 'source-control', 'buildLiveDeviceInstances.ts');
@@ -4215,6 +4247,9 @@ test('live panels and device instances share canonical session selection', () =>
   const webRtcHook = fs.readFileSync(webRtcHookPath, 'utf8');
   const liveHook = fs.readFileSync(liveHookPath, 'utf8');
   assert.ok(explorer.includes('selectPrimaryLiveSessionsByNodeSource<LiveSession>'));
+  assert.ok(explorer.includes('if (!session.session_id || !durableLiveSessionIds.has(session.session_id)) continue;'));
+  assert.ok(explorer.includes('webRtcOnlyOfferSessions = useMemo'));
+  assert.ok(explorer.includes('webRtcOnlyOfferSessionIds'));
   assert.ok(explorer.includes('selectedPrimaryByNodeSource'));
   assert.ok(explorer.includes('renderedPrimarySessionIds: renderedSessionIds'));
   assert.ok(explorer.includes('viewerActorBySessionId'));

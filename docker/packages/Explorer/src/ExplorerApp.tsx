@@ -821,13 +821,6 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     waitingByNodeId: waitingWebRtcByNodeId,
     reload: reloadWebRtcLiveSessions,
   } = runtime;
-  const livePanelSignalBySessionId = useMemo(() => {
-    const entries = new Map<string, WebRtcLiveSession>();
-    for (const session of webRtcLiveSessions) {
-      if (session.session_id) entries.set(session.session_id, session);
-    }
-    return entries;
-  }, [webRtcLiveSessions]);
   const canonicalLiveSessions = useMemo<LiveSession[]>(() => {
     const bySessionId = new Map<string, LiveSession>();
     for (const session of liveSessions) {
@@ -836,6 +829,18 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
     }
     return Array.from(bySessionId.values());
   }, [liveSessions]);
+  const durableLiveSessionIds = useMemo(() => new Set(canonicalLiveSessions.map((session) => session.session_id)), [canonicalLiveSessions]);
+  const livePanelSignalBySessionId = useMemo(() => {
+    const entries = new Map<string, WebRtcLiveSession>();
+    for (const session of webRtcLiveSessions) {
+      if (!session.session_id || !durableLiveSessionIds.has(session.session_id)) continue;
+      entries.set(session.session_id, session);
+    }
+    return entries;
+  }, [durableLiveSessionIds, webRtcLiveSessions]);
+  const webRtcOnlyOfferSessions = useMemo(() => (
+    webRtcLiveSessions.filter((session) => Boolean(session.session_id && session.has_offer && !durableLiveSessionIds.has(session.session_id)))
+  ), [durableLiveSessionIds, webRtcLiveSessions]);
   const primaryLiveSelectionByNodeSource = useMemo(() => (
     selectPrimaryLiveSessionsByNodeSource<LiveSession>(canonicalLiveSessions, livePanelSignalBySessionId)
   ), [canonicalLiveSessions, livePanelSignalBySessionId]);
@@ -896,13 +901,19 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       latestPreviewStatus: livePanelSessions.some((session) => session.latest_chunk_path) ? 'chunk_available' : 'no_recording_chunks',
       webRtcPreviewAvailable: webRtcLiveSessions.some(isWebRtcLivePreviewable),
       webRtcPreviewableSessionIds: webRtcLiveSessions
+        .filter((session) => durableLiveSessionIds.has(session.session_id))
         .filter(isWebRtcLivePreviewable)
         .map((session) => session.session_id),
+      webRtcOnlyOfferSessionIds: webRtcOnlyOfferSessions.map((session) => session.session_id),
     };
     (window as any).__explorerLiveMergeDebug = {
       canonicalSessionIds,
       renderedSessionIds,
       renderedPrimarySessionIds: renderedSessionIds,
+      durableSessionIds: canonicalSessionIds,
+      signalAnnotatedDurableSessionIds: Array.from(livePanelSignalBySessionId.keys()),
+      webRtcOnlyOfferSessionIds: webRtcOnlyOfferSessions.map((session) => session.session_id),
+      webRtcOnlyOffersDiagnosticOnly: true,
       runtimeEventSessionIds,
       rejectedRuntimeEventAsSessionIds,
       rejectedSessionIds,
@@ -916,7 +927,7 @@ export function ExplorerApp({ apiBaseUrl = '' }: ExplorerAppProps) {
       viewerActorBySessionId: (window as any).__explorerViewerPeerDebug || {},
       viewerStateBySessionViewer,
     };
-  }, [canonicalLiveSessions, livePanelSessions, liveRuntimeEventsBySessionId, peerEnabledSessions, preferredSessionByNodeSource, primaryLiveSelectionByNodeSource, rejectedRuntimeEventAsSessionIds, runtimeEventSessionIds, viewerStateBySessionViewer, webRtcLiveSessions]);
+  }, [canonicalLiveSessions, durableLiveSessionIds, livePanelSessions, livePanelSignalBySessionId, liveRuntimeEventsBySessionId, peerEnabledSessions, preferredSessionByNodeSource, primaryLiveSelectionByNodeSource, rejectedRuntimeEventAsSessionIds, runtimeEventSessionIds, viewerStateBySessionViewer, webRtcLiveSessions, webRtcOnlyOfferSessions]);
 
 
   const reloadRuntimeLiveSessions = useCallback(async () => {

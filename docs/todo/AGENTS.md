@@ -1,3 +1,9 @@
+## 2026-05-07 — Durable-only live cards for WebRTC offers (new)
+- [x] Kept `/api/live_sessions` as the only source of LiveSourceCard render authority; `/api/live` WebRTC offer inventory now only annotates matching durable session ids.
+- [x] Classified `/api/live` offers with no durable record as diagnostic-only `webRtcOnlyOfferSessions` so they cannot use `/api/live_sessions/{id}/signal` and 404/reload-loop as synthetic cards.
+- [x] Added Explorer static contracts to lock durable-id-gated WebRTC signal overlays, diagnostic-only WebRTC-only offer ids, and LiveSourceCard rendering exclusively from `livePanelSessions`.
+- [ ] Next validation item: reproduce stale `/api/live` offer without durable `/api/live_sessions` record and confirm Explorer debug lists it under `webRtcOnlyOfferSessionIds` while rendering no watchable LiveSourceCard.
+
 ## 2026-05-07 — Connect Device single local camera owner (new)
 - [x] Consolidated local camera ownership under `useCameraSession`; it remains the only Connect Device module allowed to call `getUserMedia` and owns stream, permission, device inventory, selected/active device ids, start, stop, and refresh.
 - [x] Converted `deviceMonitorHooks.useLocalCameras` into passive enumerate-only compatibility inventory with an explicit no-permission-request contract.
