@@ -1,3 +1,10 @@
+## 2026-05-07 — Connect Device single local camera owner (new)
+- [x] Consolidated local camera ownership under `useCameraSession`; it remains the only Connect Device module allowed to call `getUserMedia` and owns stream, permission, device inventory, selected/active device ids, start, stop, and refresh.
+- [x] Converted `deviceMonitorHooks.useLocalCameras` into passive enumerate-only compatibility inventory with an explicit no-permission-request contract.
+- [x] Updated `FullscreenDevicePreview` to use `cameraState.devices` and `cameraState.permission` as canonical local camera picker/permission inputs, avoiding a second local camera surface.
+- [x] Added static contracts covering the single local camera owner model and docs/readme guard against a second monitor-hook `getUserMedia` path.
+- [ ] Next validation item: on iPhone Safari, search for `getUserMedia(` should show only `useCameraSession` and non-runtime docs/tests, then confirm camera labels refresh after explicit camera start.
+
 ## 2026-05-07 — Connect Device monitor controls + broadcast creation diagnostics (new)
 - [x] Restored Connect Device monitor top/bottom controls from active local `MediaStream` ownership instead of live-session state, so camera-ready previews keep Record/Start Broadcast/Fullscreen/Explorer/Switch controls visible even when no session exists.
 - [x] Restricted Stop Broadcast visibility to real broadcast sessions and changed stop handling to close publisher/polling/session bookkeeping without stopping the local camera preview.

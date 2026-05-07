@@ -3744,11 +3744,15 @@ test('connect device monitor shell wiring and contracts', () => {
   const liveBroadcastAlignmentPath = path.join(packageRoot, 'app', 'connect', 'device', 'liveBroadcastAlignment.ts');
   const cameraSessionPath = path.join(packageRoot, 'app', 'connect', 'device', 'cameraSession.ts');
   const useCameraSessionPath = path.join(packageRoot, 'app', 'connect', 'device', 'useCameraSession.ts');
+  const deviceReadmePath = path.join(packageRoot, 'app', 'connect', 'device', 'README.md');
+  const repoTodoPath = path.join(repoRoot, 'docs', 'todo', 'AGENTS.md');
   const connectPage = fs.readFileSync(connectPagePath, 'utf8');
   const cameraSession = fs.readFileSync(cameraSessionPath, 'utf8');
   const useCameraSession = fs.readFileSync(useCameraSessionPath, 'utf8');
   const broadcastSession = fs.readFileSync(broadcastSessionPath, 'utf8');
   const liveBroadcastAlignment = fs.readFileSync(liveBroadcastAlignmentPath, 'utf8');
+  const deviceReadme = fs.readFileSync(deviceReadmePath, 'utf8');
+  const repoTodo = fs.readFileSync(repoTodoPath, 'utf8');
 
   assert.ok(page.includes("import DeviceMonitorShell from './DeviceMonitorShell'"));
   assert.ok(page.includes("useState<'local' | 'remote'>('local')"));
@@ -3776,9 +3780,9 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.match(page, /publishLiveSignalOffer\(\s*sessionId/);
   assert.match(page, /ensureLiveBroadcastAlignment\(\{\s*api,\s*sessionId,\s*nodeId: nodeId \|\|/);
   assert.ok(page.includes('const handleUseSelectedLocalDevice = async () => {'));
-  assert.match(preview, /const \{\s*devices: hookLocalDevices/);
+  assert.ok(!preview.includes('devices: hookLocalDevices'));
   assert.match(preview, /useRemoteCameras\(\{\s*mode,\s*remotePickerOpen: pickerOpen && mode === 'remote',?\s*\}\)/);
-  assert.ok(preview.includes('Array.isArray(localDevices) ? localDevices : []'));
+  assert.ok(preview.includes('Array.isArray(cameraState?.devices) ? cameraState.devices : []'));
   assert.ok(preview.includes('localDevices={safeLocalDevices}'));
   assert.ok(!liveSession.includes('Confirm camera permissions and use a secure (HTTPS) origin on iOS Safari.'));
   assert.ok(css.includes('.picker-backdrop'));
@@ -3834,6 +3838,13 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(page.includes('const syncResult = await syncBrowserRuntimeNode(nodeId);'));
   assert.ok(!page.includes('await api.heartbeatNode({ nodeId, token: tokenInfo.token });'));
   assert.ok(hooks.includes('shouldPollDeviceControlPlane'));
+  assert.ok(hooks.includes('CameraSession owns the canonical local camera lifecycle. This hook must not request media permissions.'));
+  assert.ok(!hooks.includes('getUserMedia('));
+  assert.ok(useCameraSession.includes('getUserMedia('));
+  assert.ok(useCameraSession.includes('Canonical local camera authority'));
+  assert.ok(preview.includes('Array.isArray(cameraState?.devices) ? cameraState.devices : []'));
+  assert.ok(preview.includes("cameraState?.permission === 'unknown' ? 'prompt'"));
+  assert.ok(!preview.includes('useLocalCameras'));
   assert.ok(hooks.includes('if (!shouldPollLiveSurface()) return;'));
   assert.ok(hooks.includes('}, 10000);'));
   assert.ok(liveSession.includes('Promise<LiveSessionRecord | null>'));
@@ -3858,6 +3869,9 @@ test('connect device monitor shell wiring and contracts', () => {
   assert.ok(liveBroadcastAlignment.includes('session.session_id === input.sessionId') || liveBroadcastAlignment.includes('session_id === input.sessionId'));
   assert.ok(liveBroadcastAlignment.includes('match.node_id !== input.nodeId'));
   assert.ok(liveBroadcastAlignment.includes('!match.has_offer'));
+  assert.ok(deviceReadme.includes('add a second `getUserMedia` call'));
+  assert.ok(deviceReadme.includes('useCameraSession'));
+  assert.ok(repoTodo.includes('single local camera owner'));
 });
 
 test('connect device route keeps canonical shim and deterministic broadcast wiring', () => {

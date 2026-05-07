@@ -6,7 +6,6 @@ import { useState, useRef, useEffect, useCallback, RefObject } from 'react';
 import { OverlayState } from './deviceMonitorTypes';
 import type { CameraSessionState } from './cameraSession';
 import {
-  useLocalCameras,
   useRemoteCameras,
   useWebGLFx,
   useHistogram,
@@ -114,13 +113,9 @@ export default function FullscreenDevicePreview({
   const [mounted, setMounted] = useState(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const {
-    devices: hookLocalDevices,
-    permission: localPermission,
-    refresh: refreshLocal,
-  } = useLocalCameras();
-  const localDevices = cameraState?.devices ?? hookLocalDevices;
-  const safeLocalDevices = Array.isArray(localDevices) ? localDevices : [];
+  const safeLocalDevices = Array.isArray(cameraState?.devices) ? cameraState.devices : [];
+  const localPermission = cameraState?.permission === 'unknown' ? 'prompt' : (cameraState?.permission ?? 'prompt');
+  const refreshLocal = onRefreshDevices ?? (async () => undefined);
   const { nodes: remoteNodes, refresh: refreshRemote } = useRemoteCameras({
     mode,
     remotePickerOpen: pickerOpen && mode === 'remote',
@@ -579,7 +574,7 @@ export default function FullscreenDevicePreview({
         onModeChange={onModeChange}
         onOpenRemoteNode={(nodeId) => openDeviceTab(nodeId)}
         onRefresh={async () => {
-          await (onRefreshDevices ? onRefreshDevices() : refreshLocal());
+          await refreshLocal();
           refreshRemote();
         }}
       />
