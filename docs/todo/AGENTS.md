@@ -1,3 +1,10 @@
+## 2026-05-07 — WebRTC live preview RTP delivery before recording work (new)
+- [x] Added explicit publisher sendonly video/audio transceivers before offer creation and replaced tracks through transceiver senders instead of falling back to generic `addTrack(...)`.
+- [x] Added explicit Explorer viewer recvonly video/audio transceivers before applying the device offer so answer negotiation has stable receive m-lines.
+- [x] Added SDP/transceiver/sender/receiver diagnostics for offer/answer directions, track ids, current directions, and RTP counters in publisher/viewer debug objects.
+- [x] Disabled recording controls until live video rendering is proven; recording implementation remains intentionally untouched.
+- [ ] Next validation item: confirm Explorer viewer reports inboundVideoBytesReceived > 0, inboundVideoFramesDecoded > 0, and mediaFailureClass=frames_rendering before enabling any device-owned recording command lane work.
+
 ## 2026-05-06 — WebRTC ICE candidate ordering and role-correct application (new)
 - [x] Added shared ICE helpers for candidate keys, candidate type extraction, safe `addIceCandidate(...)`, and selected candidate-pair stats summarization.
 - [x] Explorer viewer now queues device ICE until the remote offer is applied, dedupes by candidate key, flushes after `setRemoteDescription(offer)`, and keeps polling/applying device ICE without failing just because playback has not rendered.

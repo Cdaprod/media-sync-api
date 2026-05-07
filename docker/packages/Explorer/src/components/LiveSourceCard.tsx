@@ -7,6 +7,7 @@ import type { WebRtcLiveSession } from '../contracts/live';
 import type { LiveSessionRecord } from '../types/liveSession';
 import { StreamHub } from '../runtime/StreamHub';
 import { getIceCandidateKey, safeAddIceCandidate, summarizeCandidatePairFromStats } from '../live/iceCandidateUtils';
+import { extractMediaDirection, summarizePeerReceivers, summarizePeerTransceivers } from '../live/webrtcSdpDiagnostics';
 
 function usePreviewUrl(apiBase: string, sessionId: string, active: boolean) {
   const [url, setUrl] = useState('');
@@ -317,6 +318,8 @@ export function LiveSourceCard({
     stickyOfferSeenRef.current = false;
     viewerActorCreatedAtRef.current = Date.now();
     const peer = new RTCPeerConnection();
+    peer.addTransceiver('video', { direction: 'recvonly' });
+    peer.addTransceiver('audio', { direction: 'recvonly' });
     peerConnRef.current = peer;
     deviceIceReceivedKeysRef.current.clear();
     appliedDeviceIceKeysRef.current.clear();
@@ -364,6 +367,8 @@ export function LiveSourceCard({
       playbackStatus: 'idle',
       iceStatus: 'idle',
       activePeerCount: 1,
+      ...summarizePeerReceivers(peer),
+      ...summarizePeerTransceivers(peer),
     });
     publishViewerState('waiting_for_offer', 'initializing', { signaling: 'waiting_for_offer', media: 'idle', playback: 'idle', ice: 'idle' });
 
@@ -383,9 +388,10 @@ export function LiveSourceCard({
 
     const publishIceCandidateDebug = async (patch: Record<string, unknown> = {}) => {
       let statsPatch: Record<string, unknown> = {};
-      if (peerConnRef.current) {
+      const activePeer = peerConnRef.current;
+      if (activePeer) {
         try {
-          statsPatch = await summarizeCandidatePairFromStats(peerConnRef.current);
+          statsPatch = await summarizeCandidatePairFromStats(activePeer);
         } catch (error) {
           statsPatch = { candidatePairStatsError: error instanceof Error ? error.message : String(error) };
         }
@@ -396,11 +402,13 @@ export function LiveSourceCard({
         deviceIceQueuedCount: queuedDeviceIceRef.current.length,
         deviceIceAddErrors: deviceIceAddErrorsRef.current,
         viewerIcePublishedCount: viewerIcePublishedCountRef.current,
-        iceConnectionState: peerConnRef.current?.iceConnectionState ?? null,
-        connectionState: peerConnRef.current?.connectionState ?? null,
+        iceConnectionState: activePeer?.iceConnectionState ?? null,
+        connectionState: activePeer?.connectionState ?? null,
         selectedCandidatePair: null,
         localCandidateTypes: [],
         remoteCandidateTypes: [],
+        ...(activePeer ? summarizePeerReceivers(activePeer) : { receiverKinds: [], receiverTrackIds: [] }),
+        ...(activePeer ? summarizePeerTransceivers(activePeer) : { transceiverDirections: [], transceiverCurrentDirections: [] }),
         ...statsPatch,
         ...patch,
       });
@@ -493,6 +501,7 @@ export function LiveSourceCard({
         remoteTrackCount: remoteTracks.length,
         remoteVideoTrackCount: remoteTracks.filter((track) => track.kind === 'video').length,
         remoteAudioTrackCount: remoteTracks.filter((track) => track.kind === 'audio').length,
+        remoteVideoTrackId: remoteVideoTrack?.id ?? null,
         remoteVideoTrackReadyState: remoteVideoTrack?.readyState ?? null,
         remoteVideoTrackMuted: remoteVideoTrack?.muted ?? null,
         remoteVideoTrackEnabled: remoteVideoTrack?.enabled ?? null,
@@ -506,6 +515,8 @@ export function LiveSourceCard({
         videoWidth: video?.videoWidth ?? 0,
         videoHeight: video?.videoHeight ?? 0,
         lastSrcObjectAssignedAt: lastSrcObjectAssignedAtRef.current,
+        ...summarizePeerReceivers(activePeer),
+        ...summarizePeerTransceivers(activePeer),
         ...latestInboundVideoStatsRef.current,
       });
     };
@@ -729,7 +740,7 @@ export function LiveSourceCard({
             publishViewerState('answer_publishing', 'set-remote-description', { signaling: 'answer_publishing' });
             markExplorerLiveFlowDebug({ viewerStatus: 'answer_publishing' });
             try {
-              markExplorerViewerPeerDebug({ offerSeenAt: Date.now(), stickyOfferSeen: true });
+              markExplorerViewerPeerDebug({ offerSeenAt: Date.now(), stickyOfferSeen: true, offerVideoDirection: extractMediaDirection(signal.offer.sdp || '', 'video'), offerAudioDirection: extractMediaDirection(signal.offer.sdp || '', 'audio') });
               await peerConnRef.current.setRemoteDescription(new RTCSessionDescription(signal.offer));
               await flushQueuedDeviceIce();
             } catch (error) {
@@ -741,6 +752,7 @@ export function LiveSourceCard({
             try {
               markExplorerViewerPeerDebug({ answerCreatedAt: Date.now() });
               await peerConnRef.current.setLocalDescription(answer);
+              markExplorerViewerPeerDebug({ answerVideoDirection: extractMediaDirection(answer.sdp || '', 'video'), answerAudioDirection: extractMediaDirection(answer.sdp || '', 'audio'), ...summarizePeerReceivers(peer), ...summarizePeerTransceivers(peer) });
             } catch (error) {
               setFailure('set_local_description_failed', 'Live viewer failed to prepare answer.');
               markExplorerViewerPeerDebug({ failureReason: 'set_local_description_failed', setLocalDescriptionError: error instanceof Error ? error.message : String(error) });
@@ -847,6 +859,8 @@ export function LiveSourceCard({
     };
   }, [api, isActive, peerEnabled, peerRetryToken, session.session_id]);
 
+
+  const liveVideoRendering = mediaFailureClass === 'frames_rendering' || (playbackStatus === 'playing' && peerVideoRef.current && peerVideoRef.current.videoWidth > 0 && peerVideoRef.current.videoHeight > 0);
 
   const livePreviewLabel = !isActive ? 'no active session'
     : session.status === 'ended' ? 'session ended'
@@ -956,6 +970,8 @@ export function LiveSourceCard({
                 className="btn"
                 type="button"
                 style={{ flex: 1, fontSize: 11 }}
+                disabled={!liveVideoRendering}
+                title={!liveVideoRendering ? 'Live video must render before device recording is enabled.' : undefined}
                 onClick={() => onStartRecording(session)}
               >
                 Request device rec
@@ -966,6 +982,8 @@ export function LiveSourceCard({
                 className="btn"
                 type="button"
                 style={{ flex: 1, fontSize: 11 }}
+                disabled={!liveVideoRendering}
+                title={!liveVideoRendering ? 'Live video must render before device recording controls are enabled.' : undefined}
                 onClick={() => onStopRecording(session)}
               >
                 Stop device rec

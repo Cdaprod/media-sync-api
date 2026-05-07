@@ -29,6 +29,7 @@ import {
   stripNodeAuthQueryParams,
 } from '../../../src/lib/browserRuntimeIdentity';
 import { getIceCandidateKey, safeAddIceCandidate, summarizeCandidatePairFromStats } from '../../../src/live/iceCandidateUtils';
+import { extractMediaDirection, summarizePeerSenders, summarizePeerTransceivers } from '../../../src/live/webrtcSdpDiagnostics';
 // CSS import removed – now in layout.tsx
 
 const api = createApiClient('');
@@ -447,23 +448,40 @@ export default function ConnectDevicePage() {
       iceConnectionState: peer.iceConnectionState,
       signalingState: peer.signalingState,
       localTrackCount: stream.getTracks().filter((track) => track.readyState === 'live').length,
-      localVideoTrackReadyState: localVideoTrack?.readyState ?? null,
       localVideoTrackMuted: localVideoTrack?.muted ?? null,
+      localVideoTrackId: localVideoTrack?.id ?? null,
+      localVideoTrackReadyState: localVideoTrack?.readyState ?? null,
       localVideoTrackEnabled: localVideoTrack?.enabled ?? null,
+      senderKinds: [],
+      senderTrackIds: [],
+      transceiverDirections: [],
+      transceiverCurrentDirections: [],
+      ...summarizePeerSenders(peer),
+      ...summarizePeerTransceivers(peer),
       ...outboundPatch,
       publisherMediaFailureClass,
     });
   };
 
+  const ensurePublisherTransceivers = (peer: RTCPeerConnection, stream: MediaStream) => {
+    const transceivers = peer.getTransceivers();
+    const videoTrack = stream.getVideoTracks().find((track) => track.readyState === 'live') || null;
+    const audioTrack = stream.getAudioTracks().find((track) => track.readyState === 'live') || null;
+    if (videoTrack && !transceivers.some((transceiver) => transceiver.receiver.track.kind === 'video')) {
+      peer.addTransceiver('video', { direction: 'sendonly' });
+    }
+    if (audioTrack && !transceivers.some((transceiver) => transceiver.receiver.track.kind === 'audio')) {
+      peer.addTransceiver('audio', { direction: 'sendonly' });
+    }
+  };
+
   const reconcilePublisherTracks = async (peer: RTCPeerConnection, stream: MediaStream) => {
-    const senders = peer.getSenders();
+    ensurePublisherTransceivers(peer, stream);
+    const transceivers = peer.getTransceivers();
     for (const track of stream.getTracks().filter((item) => item.readyState === 'live')) {
-      const existingSender = senders.find((sender) => sender.track?.kind === track.kind);
-      if (existingSender) {
-        if (existingSender.track?.id !== track.id) await existingSender.replaceTrack(track);
-      } else {
-        peer.addTrack(track, stream);
-      }
+      const transceiver = transceivers.find((candidate) => candidate.receiver.track.kind === track.kind);
+      const sender = transceiver?.sender || peer.getSenders().find((candidate) => candidate.track?.kind === track.kind);
+      if (sender && sender.track?.id !== track.id) await sender.replaceTrack(track);
     }
   };
 
@@ -601,6 +619,12 @@ export default function ConnectDevicePage() {
       viewerIceAppliedCount: appliedViewerIceKeysRef.current.size,
       viewerIceQueuedCount: queuedViewerIceRef.current.length,
         deviceIcePublishedCount: deviceIcePublishedCountRef.current,
+        senderKinds: [],
+        senderTrackIds: [],
+        transceiverDirections: [],
+        transceiverCurrentDirections: [],
+        ...summarizePeerSenders(peer),
+        ...summarizePeerTransceivers(peer),
       });
       if (peer.connectionState === 'connected' || peer.iceConnectionState === 'connected' || peer.iceConnectionState === 'completed') {
         setPeerStatus('connected');
@@ -620,6 +644,7 @@ export default function ConnectDevicePage() {
     peer.onicegatheringstatechange = publishStateDebug;
     peer.onsignalingstatechange = publishStateDebug;
     await reconcilePublisherTracks(peer, stream);
+    markPublisherPeerDebug({ ...summarizePeerSenders(peer), ...summarizePeerTransceivers(peer), localVideoTrackId: stream.getVideoTracks()[0]?.id ?? null, localVideoTrackReadyState: stream.getVideoTracks()[0]?.readyState ?? null });
     peer.onicecandidate = (event) => {
       if (!event.candidate) return;
       deviceIcePublishedCountRef.current += 1;
@@ -632,7 +657,7 @@ export default function ConnectDevicePage() {
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
     markBroadcastDebug({ offerCreated: true });
-    markPublisherPeerDebug({ offerCreatedAt, signalingState: peer.signalingState });
+    markPublisherPeerDebug({ offerCreatedAt, signalingState: peer.signalingState, offerVideoDirection: extractMediaDirection(offer.sdp || '', 'video'), offerAudioDirection: extractMediaDirection(offer.sdp || '', 'audio'), ...summarizePeerSenders(peer), ...summarizePeerTransceivers(peer) });
     try {
       await api.publishLiveSignalOffer(sessionId, { type: 'offer', sdp: offer.sdp || '' }, nodeId || undefined);
       markBroadcastDebug({ offerPosted: true, offerPostStatus: 'ok' });
@@ -680,7 +705,7 @@ export default function ConnectDevicePage() {
           appendTrace(`peer:answer-applied ${sessionId}`);
           setPeerStatus('answer_applied');
           setBroadcast((prev) => ({ ...prev, stage: 'waiting_for_answer', waitingForAnswer: false, updatedAt: Date.now() }));
-          markPublisherPeerDebug({ answerAppliedAt: Date.now(), answerApplied: true, peerClosedBy: publisherPeerClosedByRef.current, signalingState: activePeer.signalingState });
+          markPublisherPeerDebug({ answerAppliedAt: Date.now(), answerApplied: true, peerClosedBy: publisherPeerClosedByRef.current, signalingState: activePeer.signalingState, answerVideoDirection: extractMediaDirection(signal.answer.sdp || '', 'video'), ...summarizePeerSenders(activePeer), ...summarizePeerTransceivers(activePeer) });
         }
         for (const candidate of signal.ice_from_viewer || []) {
           await applyViewerIceCandidate(candidate, 'poll');

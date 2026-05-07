@@ -64,6 +64,7 @@ test('package exports include entrypoints', () => {
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'utils', 'runtimeChips.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'StreamHub.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'live', 'iceCandidateUtils.ts')));
+  assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'live', 'webrtcSdpDiagnostics.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'useRuntimeController.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'useLivePreviewState.ts')));
   assert.ok(fs.existsSync(path.join(packageRoot, 'src', 'runtime', 'useRuntimeEventReactions.ts')));
@@ -4233,6 +4234,48 @@ test('Safari WebRTC playback boundary preserves srcObject and samples RTP stats'
   assert.ok(!device.includes('publisher_failed'));
 });
 
+
+
+test('WebRTC live preview uses explicit transceiver directions and SDP diagnostics before recording work', () => {
+  const device = fs.readFileSync(path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx'), 'utf8');
+  const card = fs.readFileSync(path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx'), 'utf8');
+  const sdpDiagnostics = fs.readFileSync(path.join(packageRoot, 'src', 'live', 'webrtcSdpDiagnostics.ts'), 'utf8');
+
+  assert.ok(device.includes("peer.addTransceiver('video', { direction: 'sendonly' })") || device.includes('peer.addTransceiver("video", { direction: "sendonly" })'));
+  assert.ok(device.includes("peer.addTransceiver('audio', { direction: 'sendonly' })") || device.includes('peer.addTransceiver("audio", { direction: "sendonly" })'));
+  assert.ok(device.includes('await sender.replaceTrack(track)'));
+  assert.ok(device.includes('offerVideoDirection'));
+  assert.ok(device.includes('offerAudioDirection'));
+  assert.ok(device.includes('senderKinds'));
+  assert.ok(device.includes('senderTrackIds'));
+  assert.ok(device.includes('transceiverDirections'));
+  assert.ok(device.includes('transceiverCurrentDirections'));
+  assert.ok(device.includes('localVideoTrackId'));
+  assert.ok(device.includes('outboundVideoFramesEncoded'));
+  assert.ok(device.includes('outboundVideoBytesSent'));
+
+  assert.ok(card.includes("peer.addTransceiver('video', { direction: 'recvonly' })") || card.includes('peer.addTransceiver("video", { direction: "recvonly" })'));
+  assert.ok(card.includes("peer.addTransceiver('audio', { direction: 'recvonly' })") || card.includes('peer.addTransceiver("audio", { direction: "recvonly" })'));
+  assert.ok(card.includes('offerVideoDirection'));
+  assert.ok(card.includes('answerVideoDirection'));
+  assert.ok(card.includes('receiverKinds'));
+  assert.ok(card.includes('receiverTrackIds'));
+  assert.ok(card.includes('remoteVideoTrackId'));
+  assert.ok(card.includes('remoteVideoTrackReadyState'));
+  assert.ok(card.includes('inboundVideoBytesReceived'));
+  assert.ok(card.includes('inboundVideoFramesDecoded'));
+  assert.ok(card.includes('mediaFailureClass'));
+  assert.ok(card.includes('disabled={!liveVideoRendering}'));
+  assert.ok(!card.includes('captureStream('));
+  assert.ok(!card.includes('publisher_failed'));
+
+  assert.ok(sdpDiagnostics.includes('export function extractMediaDirection'));
+  assert.ok(sdpDiagnostics.includes('export function summarizePeerTransceivers'));
+  assert.ok(sdpDiagnostics.includes('export function summarizePeerSenders'));
+  assert.ok(sdpDiagnostics.includes('export function summarizePeerReceivers'));
+  assert.ok(!device.includes('new MediaRecorder'));
+  assert.ok(!card.includes('new MediaRecorder'));
+});
 
 test('WebRTC ICE candidates are queued, deduped, flushed, and debug-counted by role', () => {
   const card = fs.readFileSync(path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx'), 'utf8');
