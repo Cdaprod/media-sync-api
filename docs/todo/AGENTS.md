@@ -1,3 +1,8 @@
+## 2026-05-08 — Replace startLiveSession method cleanly (new)
+- [x] Replaced the entire `startLiveSession` method with a thin API wrapper: one payload, one diagnostics object, one POST fetch, one durable record return.
+- [x] Removed the diagnostics helper/spread approach and locked static contracts against orphan spreads, duplicated diagnostics fragments, and `withLiveSessionCreateDiagnostics` calls.
+- [ ] Next validation item: rebuild the LAN Explorer bundle from this commit and verify the old line 282-310 syntax overlay is gone.
+
 ## 2026-05-08 — Remove live-session diagnostics spreads from API method (new)
 - [x] Removed every diagnostics spread from `startLiveSession` and copied diagnostic fields explicitly into `markConnectDeviceBroadcastDebug` payloads so no orphan spread can be emitted by merge edits.
 - [x] Updated static contracts to reject both `...liveSessionCreateDiagnostics` and `...getLiveSessionCreateDiagnosticsPatch()` inside the durable start method.

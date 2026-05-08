@@ -281,85 +281,71 @@ export function createApiClient(baseUrl = ''): ApiClient {
 
       return response.json();
     },
-    async startLiveSession(nodeId: string, sourceKind: LiveSourceKind, metadata: Record<string, unknown> = {}): Promise<LiveSessionRecord> {
-      const liveSessionCreateDiagnostics = {
-        liveSessionCreateAttempted: true,
+    async startLiveSession(
+      nodeId: string,
+      sourceKind: LiveSourceKind,
+      metadata: Record<string, unknown> = {},
+    ): Promise<LiveSessionRecord> {
+      const authHeaders = getNodeAuthHeaders(nodeId);
+      const payload = {
+        node_id: nodeId,
+        source_kind: sourceKind,
+        metadata,
+      };
+        durableLiveSessionCreateRoute: '/api/live_sessions/start',
+        durableLiveSessionCreatePayload: payload,
+        durableLiveSessionCreateStatus: null as number | null,
+        durableLiveSessionCreateResponse: null as unknown,
         liveSessionCreateSucceeded: false,
         liveSessionCreateError: null as string | null,
+        sessionIdAfterStartPreview: null as string | null,
+        hasNodeAuthHeaders: Boolean(
+          authHeaders.Authorization || authHeaders['X-Media-Sync-Node-Id'],
+        ),
       };
-      const withLiveSessionCreateDiagnostics = (patch: Record<string, unknown>): Record<string, unknown> =>
-        Object.assign(patch, liveSessionCreateDiagnostics);
-
-      markConnectDeviceBroadcastDebug(withLiveSessionCreateDiagnostics({
-      }));
-
-        markConnectDeviceBroadcastDebug(withLiveSessionCreateDiagnostics({
-        }));
-
-      markConnectDeviceBroadcastDebug(withLiveSessionCreateDiagnostics({
-      }));
-        markConnectDeviceBroadcastDebug(withLiveSessionCreateDiagnostics({
-        }));
-
-      markConnectDeviceBroadcastDebug(withLiveSessionCreateDiagnostics({
-      }));
-        hasNodeAuthHeaders: Boolean(authHeaders.Authorization && authHeaders['X-Media-Sync-Node-Id']),
-      });
-      const response = await fetch(buildUrl('/api/live_sessions/start'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          ...authHeaders,
-        },
-        cache: 'no-store',
-        body: JSON.stringify({ node_id: nodeId, source_kind: sourceKind, metadata }),
-      });
-      if (!response.ok) {
-        markConnectDeviceBroadcastDebug({
-          startLiveSessionStatus: response.status,
-          startLiveSessionSessionId: null,
-          startLiveSessionWrongGetDetected: false,
-          lastFailureReason: `start_live_session_failed:${response.status}`,
+      markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
+        const response = await fetch(buildUrl('/api/live_sessions/start'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            ...authHeaders,
+          },
+          body: JSON.stringify(payload),
         });
-        throw new Error(`Failed to start live session: ${response.status}`);
+        let body: unknown = null;
+        try {
+          body = await response.json();
+        } catch {
+          body = null;
+        }
+        liveSessionCreateDiagnostics.durableLiveSessionCreateStatus = response.status;
+        liveSessionCreateDiagnostics.durableLiveSessionCreateResponse = body;
+        if (!response.ok) {
+          const message =
+            body && typeof body === 'object' && 'detail' in body
+              ? String((body as { detail?: unknown }).detail)
+              : `Failed to start live session: ${response.status}`;
+          liveSessionCreateDiagnostics.liveSessionCreateError = message;
+          markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
+          throw new Error(message);
+        }
+        const record = body as LiveSessionRecord;
+        liveSessionCreateDiagnostics.liveSessionCreateSucceeded = Boolean(record?.session_id);
+        liveSessionCreateDiagnostics.sessionIdAfterStartPreview = record?.session_id || null;
+        if (!record?.session_id) {
+          liveSessionCreateDiagnostics.liveSessionCreateError = 'missing_session_id';
+          markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
+          throw new Error('Live session start returned no session_id');
+        }
+        markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
+        return record;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        liveSessionCreateDiagnostics.liveSessionCreateError = message;
+        markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
+        throw error;
       }
-      const payload = await response.json();
-      markConnectDeviceBroadcastDebug({
-        startLiveSessionStatus: response.status,
-        startLiveSessionSessionId: payload?.session_id || null,
-        startLiveSessionWrongGetDetected: false,
-      });
-      return payload;
-    },
-    async getLiveSession(sessionId: string): Promise<LiveSessionRecord> {
-      if (sessionId === 'start') {
-        markConnectDeviceBroadcastDebug({
-          startLiveSessionWrongGetDetected: true,
-          lastFailureReason: 'invalid_get_live_session_start',
-        });
-        throw new Error('invalid_get_live_session_start');
-      }
-      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}`), {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-        cache: 'no-store',
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to get live session: ${response.status}`);
-      }
-      return response.json();
-    },
-    async controlLiveSession(sessionId: string, action: LiveSessionControlAction): Promise<{ ok: boolean; action: LiveSessionControlAction }> {
-      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/control`), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        cache: 'no-store',
-        body: JSON.stringify({ action }),
-      });
       if (!response.ok) {
         throw new Error(`Failed to control live session: ${response.status}`);
       }
