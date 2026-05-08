@@ -4629,3 +4629,142 @@ test('device publisher peer is session-owned and republish is explicit', () => {
   assert.ok(content.includes('offerPublished: true'));
   assert.ok(content.includes('answerApplied: true'));
 });
+
+test('useLiveSession exposes explicit capture/publish/record stream accessors', () => {
+  const liveHookPath = path.join(packageRoot, 'src', 'hooks', 'useLiveSession.ts');
+  const liveHook = fs.readFileSync(liveHookPath, 'utf8');
+  // Stream authority accessors must be present so the publisher peer and
+  // MediaRecorder consume an explicit stream rather than reading
+  // videoRef.current.srcObject.
+  assert.ok(liveHook.includes('getCaptureStream'), 'useLiveSession must expose getCaptureStream');
+  assert.ok(liveHook.includes('getPublishStream'), 'useLiveSession must expose getPublishStream');
+  assert.ok(liveHook.includes('getRecordStream'), 'useLiveSession must expose getRecordStream');
+  assert.match(
+    liveHook,
+    /getCaptureStream\s*=\s*useCallback\([^)]*\(\)\s*:\s*MediaStream\s*\|\s*null\s*=>\s*streamRef\.current/,
+    'getCaptureStream must return streamRef.current',
+  );
+  assert.match(
+    liveHook,
+    /getPublishStream\s*=\s*useCallback\([^)]*\(\)\s*:\s*MediaStream\s*\|\s*null\s*=>\s*streamRef\.current/,
+    'getPublishStream must return streamRef.current',
+  );
+  assert.match(
+    liveHook,
+    /getRecordStream\s*=\s*useCallback\([^)]*\(\)\s*:\s*MediaStream\s*\|\s*null\s*=>\s*streamRef\.current/,
+    'getRecordStream must return streamRef.current',
+  );
+  // MediaRecorder must consume streamRef directly, not videoRef.srcObject.
+  assert.ok(
+    liveHook.includes('new MediaRecorder(recordSource)'),
+    'MediaRecorder must consume the explicit recordSource bound to streamRef',
+  );
+  assert.ok(
+    !liveHook.includes('new MediaRecorder(videoRef.current'),
+    'MediaRecorder must not read from videoRef preview element',
+  );
+});
+
+test('connect/device publisher resolves stream from camera/live-session, never videoRef.srcObject', () => {
+  const pagePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const page = fs.readFileSync(pagePath, 'utf8');
+
+  // Publisher stream resolution must consult camera.stream then
+  // useLiveSession.getPublishStream(), never videoRef.current.srcObject.
+  assert.ok(page.includes('getPublishStream'), 'page must consume getPublishStream from useLiveSession');
+  assert.ok(
+    page.includes('const resolvePublisherStreamSource = ()'),
+    'page must define resolvePublisherStreamSource that classifies the source',
+  );
+  const resolverStart = page.indexOf('const resolvePublisherStreamSource = ()');
+  const resolverEnd = page.indexOf(
+    'const resolveActiveCameraStream',
+    resolverStart,
+  );
+  assert.ok(resolverStart >= 0 && resolverEnd > resolverStart);
+  const resolverBody = page.slice(resolverStart, resolverEnd);
+  assert.ok(
+    !resolverBody.includes('videoRef.current'),
+    'resolvePublisherStreamSource must not read videoRef.current as a publisher source',
+  );
+  assert.ok(resolverBody.includes('camera.stream'), 'resolver must read camera.stream first');
+  assert.ok(resolverBody.includes('getPublishStream()'), 'resolver must fall back to getPublishStream()');
+  assert.ok(resolverBody.includes("source: 'camera-session'"));
+  assert.ok(resolverBody.includes("source: 'live-session'"));
+  assert.ok(resolverBody.includes("source: 'missing'"));
+
+  // Active publisher path must include publisherStreamSource in debug, never
+  // 'video-srcObject'.
+  assert.ok(page.includes('publisherStreamSource'), 'page must publish publisherStreamSource debug field');
+  assert.ok(
+    !page.includes("publisherStreamSource: 'video-srcObject'"),
+    'publisherStreamSource must never report video-srcObject',
+  );
+  assert.ok(
+    page.includes('publisherStreamSourceRef'),
+    'publisher peer must read source from publisherStreamSourceRef rather than DOM',
+  );
+
+  // handleStartBroadcast must classify the publisher source (camera-session vs
+  // live-session) and stamp it onto the publisher debug surface.
+  assert.match(
+    page,
+    /resolvePublisherStreamSource\(\)\.source === 'live-session'/,
+    'handleStartBroadcast must classify the publisher source via resolvePublisherStreamSource',
+  );
+  assert.ok(
+    page.includes('publisherStreamSourceRef.current = publisherStreamSource;'),
+    'handleStartBroadcast must store the classified source on publisherStreamSourceRef',
+  );
+});
+
+test('LiveSourceCard active viewer path uses durable-live-sessions lane only', () => {
+  const cardPath = path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx');
+  const card = fs.readFileSync(cardPath, 'utf8');
+
+  // Active durable signaling API surface must be present.
+  assert.ok(card.includes('api.getLiveSignalState'), 'viewer must poll durable signal state');
+  assert.ok(card.includes('api.publishLiveSignalAnswer'), 'viewer must publish answer via durable lane');
+  assert.ok(card.includes('api.publishLiveSignalIce'), 'viewer must publish ICE via durable lane');
+
+  // Legacy /api/live viewer methods must not appear in the active viewer path.
+  assert.ok(!card.includes('api.getLiveOffer('), 'active viewer must not call getLiveOffer (legacy /api/live)');
+  assert.ok(!card.includes('api.postLiveViewerAnswer('), 'active viewer must not call postLiveViewerAnswer (legacy /api/live)');
+  assert.ok(!card.includes('api.postLiveViewerIce('), 'active viewer must not call postLiveViewerIce (legacy /api/live)');
+  assert.ok(!card.includes('api.listLiveDeviceIce('), 'active viewer must not call listLiveDeviceIce (legacy /api/live)');
+
+  // signalingLane debug marker must be emitted as durable-live-sessions.
+  assert.ok(
+    card.includes("signalingLane: 'durable-live-sessions'"),
+    'LiveSourceCard must publish signalingLane debug field',
+  );
+
+  // Composite remote stream is the viewer media authority.
+  assert.ok(card.includes('remoteCompositeStreamRef'));
+  assert.ok(card.includes('reconcileRemoteReceiverTracks'));
+});
+
+test('live_sessions.py declares durable signaling authority and bridge mirror to /api/live', () => {
+  const liveSessionsPath = path.join(repoRoot, 'app', 'api', 'live_sessions.py');
+  const content = fs.readFileSync(liveSessionsPath, 'utf8');
+
+  // Active durable signal lane comment must call out that /api/live_sessions
+  // owns the active signaling and /api/live is a mirror only.
+  assert.ok(
+    content.includes('active durable WebRTC signaling lane'),
+    'route ownership doc must mark /api/live_sessions as the active signaling authority',
+  );
+  assert.ok(
+    content.includes('/api/live is now a runtime/WebRTC'),
+    'route ownership doc must clarify /api/live is mirror/listing only',
+  );
+  assert.ok(
+    !content.includes('keep browser signaling on /api/live'),
+    'stale comment claiming /api/live is the browser signaling lane must be removed',
+  );
+
+  // Bridge functions must remain so /api/live keeps reflecting durable state.
+  assert.ok(content.includes('def _bridge_signal_offer('));
+  assert.ok(content.includes('def _bridge_signal_answer('));
+  assert.ok(content.includes('def _bridge_signal_ice('));
+});

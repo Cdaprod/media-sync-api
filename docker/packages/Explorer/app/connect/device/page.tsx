@@ -166,6 +166,7 @@ export default function ConnectDevicePage() {
     stopPreview,
     error,
     lastClaimId,
+    getPublishStream,
   } = useLiveSession(api, nodeId);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const peerSessionIdRef = useRef<string | null>(null);
@@ -180,6 +181,9 @@ export default function ConnectDevicePage() {
   const publisherActorCreatedAtRef = useRef<number | null>(null);
   const publisherActorTeardownCountRef = useRef(0);
   const publisherAnswerAppliedRef = useRef(false);
+  const publisherStreamSourceRef = useRef<'camera-session' | 'live-session'>(
+    'camera-session',
+  );
   const publisherPeerClosedByRef = useRef<string | null>(null);
   const nodeHeartbeatTimerRef = useRef<ReturnType<
     typeof window.setInterval
@@ -357,16 +361,24 @@ export default function ConnectDevicePage() {
   const hasLiveVideoTrack = (
     stream: MediaStream | null | undefined,
   ): stream is MediaStream => liveVideoTracksForStream(stream).length > 0;
-  const resolveActiveCameraStream = (): MediaStream | null => {
+  // Publisher stream authority: camera (useCameraSession) is the canonical
+  // local capture authority; useLiveSession.getPublishStream() is the durable
+  // live-session authority. videoRef.srcObject is preview-only and must NOT
+  // participate in source-of-truth decisions for the publisher peer.
+  const resolvePublisherStreamSource = (): {
+    stream: MediaStream | null;
+    source: 'camera-session' | 'live-session' | 'missing';
+  } => {
     const cameraStream = camera.stream;
-    if (hasLiveVideoTrack(cameraStream)) return cameraStream;
-    const activeVideoStream = videoRef.current?.srcObject;
-    if (
-      activeVideoStream instanceof MediaStream &&
-      hasLiveVideoTrack(activeVideoStream)
-    )
-      return activeVideoStream;
-    return null;
+    if (hasLiveVideoTrack(cameraStream))
+      return { stream: cameraStream, source: 'camera-session' };
+    const liveStream = getPublishStream();
+    if (hasLiveVideoTrack(liveStream))
+      return { stream: liveStream, source: 'live-session' };
+    return { stream: null, source: 'missing' };
+  };
+  const resolveActiveCameraStream = (): MediaStream | null => {
+    return resolvePublisherStreamSource().stream;
   };
   const getUsableCameraStream = resolveActiveCameraStream;
   const failCameraStreamNotReady = (source: string) => {
@@ -391,6 +403,7 @@ export default function ConnectDevicePage() {
       lastFailureReason: 'camera_stream_not_ready',
       lastBroadcastError: 'camera_stream_not_ready',
       cameraStreamNotReadySource: source,
+      publisherStreamSource: 'missing',
     });
     appendTrace('broadcast:camera-stream-not-ready');
     setPeerStatus('failed');
@@ -777,6 +790,7 @@ export default function ConnectDevicePage() {
     stream: MediaStream,
   ) => {
     const sessionId = sessionRecord.session_id;
+    const publisherStreamSource = publisherStreamSourceRef.current;
     if (!sessionId) {
       markBroadcastDebug({
         lastPeerError: 'missing_session_id_before_offer',
@@ -818,7 +832,9 @@ export default function ConnectDevicePage() {
       viewerIceReceivedCount: viewerIceReceivedKeysRef.current.size,
       viewerIceAppliedCount: appliedViewerIceKeysRef.current.size,
       viewerIceQueuedCount: queuedViewerIceRef.current.length,
+      publisherStreamSource,
     });
+    markBroadcastDebug({ publisherStreamSource });
     if (
       typeof window === 'undefined' ||
       typeof RTCPeerConnection === 'undefined'
@@ -1181,12 +1197,18 @@ export default function ConnectDevicePage() {
       const existingStream = resolveActiveCameraStream();
       const stream = await ensureCameraStreamReady();
       if (!stream) return false;
+      const publisherStreamSource =
+        resolvePublisherStreamSource().source === 'live-session'
+          ? ('live-session' as const)
+          : ('camera-session' as const);
       traceDevice('broadcast:stream-source', {
         source: existingStream
           ? 'existing-camera-session'
           : 'new-camera-session',
+        publisherStreamSource,
         videoTracks: stream?.getVideoTracks().length ?? 0,
       });
+      markBroadcastDebug({ publisherStreamSource });
       traceDevice('camera:success', {
         hasStream: !!stream,
         videoTracks:
@@ -1352,6 +1374,7 @@ export default function ConnectDevicePage() {
       } else {
         appendTrace('heartbeat:skipped-no-token');
       }
+      publisherStreamSourceRef.current = publisherStreamSource;
       try {
         await publishPeerOffer(nextSession, stream);
       } catch (err) {

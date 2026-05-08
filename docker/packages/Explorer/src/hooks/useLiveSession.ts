@@ -196,7 +196,9 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     }
 
     try {
-      const recorder = new MediaRecorder(streamRef.current);
+      const recordSource = streamRef.current;
+      if (!recordSource) return false;
+      const recorder = new MediaRecorder(recordSource);
       recorderRef.current = recorder;
 
       recorder.addEventListener('dataavailable', (event: BlobEvent) => {
@@ -269,6 +271,13 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     return () => cleanup();
   }, [cleanup]);
 
+  // Stream authority accessors. streamRef.current is the durable live-session
+  // capture/publish/record source. videoRef is preview-only and must not be
+  // treated as a source-of-truth by the publisher peer or MediaRecorder.
+  const getCaptureStream = useCallback((): MediaStream | null => streamRef.current, []);
+  const getPublishStream = useCallback((): MediaStream | null => streamRef.current, []);
+  const getRecordStream = useCallback((): MediaStream | null => streamRef.current, []);
+
   const apiRef = useRef(api);
   apiRef.current = api;
   const startRecordingRef = useRef(startRecording);
@@ -324,5 +333,8 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     cleanup,
     error,
     lastClaimId,
+    getCaptureStream,
+    getPublishStream,
+    getRecordStream,
   };
 }

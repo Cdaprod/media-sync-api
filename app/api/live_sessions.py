@@ -28,7 +28,15 @@ router = APIRouter(prefix="/api/live_sessions", tags=["live_sessions"])
 - Audience: operator/read + registered node mutation for durable capture lifecycle.
 - Auth boundary: Caddy/operator boundary for reads; node bearer token for node-owned writes.
 - State owner: runtime.services.live_session_registry (durable lifecycle lane).
-- Naming policy: /api/live_sessions owns durable live capture lifecycle; keep browser signaling on /api/live.
+- Naming policy: /api/live_sessions owns durable live capture lifecycle AND the
+  active durable WebRTC signaling lane (offer/answer/ICE) at
+  /api/live_sessions/{session_id}/signal/*. /api/live is now a runtime/WebRTC
+  visibility mirror and listing surface only — it must not be treated as the
+  primary signaling authority by publishers or viewers. The
+  _bridge_signal_offer/_bridge_signal_answer/_bridge_signal_ice helpers below
+  exist solely to mirror durable signal writes into runtime.live_sessions so
+  /api/live keeps reflecting accurate has_offer/has_answer/viewer state for
+  list/runtime visibility.
 """
 
 
