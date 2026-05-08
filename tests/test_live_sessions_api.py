@@ -532,3 +532,29 @@ def test_viewer_runtime_signal_events_do_not_become_durable_live_sessions(client
     durable = client.get("/api/live_sessions")
     assert durable.status_code == 200
     assert all(entry["session_id"] != session_id for entry in durable.json())
+
+
+def test_live_session_response_serializes_waiting_for_answer_and_connected_status(client):
+    runtime = client.app.state.runtime
+    registry = runtime.services.live_session_registry
+    assert registry is not None
+    fresh_at = datetime.now(timezone.utc).isoformat()
+
+    for session_id, status in (
+        ("sess-status-waiting", "waiting_for_answer"),
+        ("sess-status-connected", "connected"),
+    ):
+        registry.upsert(
+            LiveSession(
+                session_id=session_id,
+                node_id="runner-status-schema",
+                source_kind="camera",
+                status=status,
+                started_at=fresh_at,
+                last_heartbeat_at=fresh_at,
+                chunk_count=0,
+            )
+        )
+        fetched = client.get(f"/api/live_sessions/{session_id}")
+        assert fetched.status_code == 200, fetched.text
+        assert fetched.json()["status"] == status

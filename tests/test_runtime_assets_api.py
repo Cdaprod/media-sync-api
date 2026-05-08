@@ -66,3 +66,13 @@ def test_live_session_and_runtime_asset_alignment_contract(client):
     # Cohesive contract alignment between live session + runtime surface.
     assert asset['session_id'] == session_id
     assert asset['node_id'] == node_id
+
+
+def test_runtime_assets_stream_route_is_not_shadowed_by_asset_id_route(client):
+    response = client.get('/api/runtime/assets/stream')
+    assert response.status_code == 200
+    assert response.headers['content-type'].startswith('text/event-stream')
+    # The static /stream route must beat /{asset_id}; otherwise this would
+    # return runtime_asset_not_found with asset_id="stream".
+    assert b'runtime_asset_not_found' not in response.content
+    assert b'event: heartbeat' in response.content

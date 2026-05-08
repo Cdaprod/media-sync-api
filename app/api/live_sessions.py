@@ -18,7 +18,11 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from app.auth.runtime_device_auth import RuntimeDeviceAuthContext, require_device_scope, require_registered_node
-from app.domain.live_sessions.models import LiveSessionControlAction, LiveSourceKind
+from app.domain.live_sessions.models import (
+    LiveSessionControlAction,
+    LiveSessionStatus,
+    LiveSourceKind,
+)
 from app.runtime import get_runtime
 from app.runtime.types import AppRuntime
 from app.storage.atomic import write_bytes_atomic
@@ -50,7 +54,7 @@ class LiveSessionResponse(BaseModel):
     session_id: str
     node_id: str
     source_kind: LiveSourceKind
-    status: Literal["idle", "previewing", "recording", "ended"]
+    status: LiveSessionStatus
     started_at: str
     last_heartbeat_at: str
     chunk_count: int
