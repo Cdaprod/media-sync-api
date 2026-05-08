@@ -329,7 +329,9 @@ export function createApiClient(baseUrl = ''): ApiClient {
           cache: 'no-store',
           body: JSON.stringify(payload),
         });
-        const body = await parseJson<LiveSessionRecord & { detail?: string; message?: string }>(response);
+        const body = await parseJson<LiveSessionRecord & { detail?: string; message?: string }>(
+          response,
+        );
         liveSessionCreateDiagnostics.durableLiveSessionCreateStatus = response.status;
         liveSessionCreateDiagnostics.durableLiveSessionCreateResponse = body;
           const message = String(body?.detail || body?.message || `Failed to start live session: ${response.status}`);

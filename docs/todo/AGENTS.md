@@ -1,3 +1,8 @@
+## 2026-05-08 — Guard startLiveSession fetch opener integrity (new)
+- [x] Added static contract coverage that `startLiveSession` keeps the durable create `fetch(...)` opener directly after the diagnostics marker.
+- [x] Locked regression checks against orphaned `method`, `headers`, `cache`, or `body` request-option blocks floating after `markConnectDeviceBroadcastDebug(...)`.
+- [ ] Next validation item: rebuild the deployed Explorer bundle on the LAN host and verify Safari no longer shows the stale `headers:` syntax overlay.
+
 ## 2026-05-08 — Repair live-session method block replacement (new)
 - [x] Replaced the full `createApiClient` live-session section from `startLiveSession` through `sendLiveSessionControl` with the corrected contiguous object-method block.
 - [x] Restored parsed error payload handling for `getLiveSession`, `controlLiveSession`, and `sendLiveSessionControl` while keeping WebRTC/ICE/rendering logic untouched.

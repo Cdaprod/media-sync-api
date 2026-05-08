@@ -466,6 +466,11 @@ test('device live session start uses POST device lane and never GETs start as a 
   assert.ok(startBody.includes('liveSessionCreateAttempted: false'));
   assert.ok(startBody.includes('liveSessionCreateDiagnostics.liveSessionCreateAttempted = true;'));
   assert.equal((startBody.match(/fetch\(buildUrl\('\/api\/live_sessions\/start'\)/g) || []).length, 1);
+  assert.ok(startBody.includes("const response = await fetch(buildUrl('/api/live_sessions/start'), {"));
+  assert.ok(startBody.includes("markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);\n        const response = await fetch(buildUrl('/api/live_sessions/start'), {"));
+  assert.ok(!startBody.includes("markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);\n          method: 'POST'"));
+  assert.ok(!startBody.includes("markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);\n        method: 'POST'"));
+  assert.ok(!/markConnectDeviceBroadcastDebug\(liveSessionCreateDiagnostics\);\n\s+(method|headers|cache|body):/.test(startBody));
   assert.ok(startBody.includes('const payload = {'));
   assert.ok(startBody.includes('durableLiveSessionCreatePayload: payload'));
   assert.ok(startBody.includes("durableLiveSessionCreateStatus: number | 'auth_required' | null;"));
