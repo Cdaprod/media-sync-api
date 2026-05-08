@@ -286,24 +286,48 @@ export function createApiClient(baseUrl = ''): ApiClient {
       sourceKind: LiveSourceKind,
       metadata: Record<string, unknown> = {},
     ): Promise<LiveSessionRecord> {
-      const authHeaders = getNodeAuthHeaders(nodeId);
       const payload = {
         node_id: nodeId,
         source_kind: sourceKind,
         metadata,
       };
-        durableLiveSessionCreateRoute: '/api/live_sessions/start',
+      const liveSessionCreateDiagnostics: {
+        durableLiveSessionCreateRoute: string;
+        durableLiveSessionCreatePayload: typeof payload;
+        durableLiveSessionCreateStatus: number | 'auth_required' | null;
+        durableLiveSessionCreateResponse: unknown;
+        liveSessionCreateAttempted: boolean;
+        liveSessionCreateSucceeded: boolean;
+        liveSessionCreateError: string | null;
+        sessionIdAfterStartPreview: string | null;
+        hasNodeAuthHeaders: boolean;
+        broadcastStartFailureClass?: 'auth_required' | 'auth_failed' | 'live_session_create_failed';
+        lastFailureReason?: string;
+      } = {
         durableLiveSessionCreatePayload: payload,
-        durableLiveSessionCreateStatus: null as number | null,
-        durableLiveSessionCreateResponse: null as unknown,
+        durableLiveSessionCreateStatus: null,
+        durableLiveSessionCreateResponse: null,
         liveSessionCreateSucceeded: false,
-        liveSessionCreateError: null as string | null,
-        sessionIdAfterStartPreview: null as string | null,
-        hasNodeAuthHeaders: Boolean(
-          authHeaders.Authorization || authHeaders['X-Media-Sync-Node-Id'],
-        ),
+        liveSessionCreateError: null,
+        sessionIdAfterStartPreview: null,
+        hasNodeAuthHeaders: false,
       };
-      markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
+      let authHeaders: Record<string, string>;
+      try {
+        authHeaders = requireNodeAuthHeaders(nodeId);
+        liveSessionCreateDiagnostics.hasNodeAuthHeaders = Boolean(
+          authHeaders.Authorization || authHeaders['X-Media-Sync-Node-Id'],
+        );
+        markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        liveSessionCreateDiagnostics.durableLiveSessionCreateStatus = 'auth_required';
+        liveSessionCreateDiagnostics.liveSessionCreateError = message;
+        liveSessionCreateDiagnostics.broadcastStartFailureClass = 'auth_required';
+        liveSessionCreateDiagnostics.lastFailureReason = 'auth_required';
+        markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
+        throw error;
+      }
         const response = await fetch(buildUrl('/api/live_sessions/start'), {
           method: 'POST',
           headers: {
@@ -311,6 +335,7 @@ export function createApiClient(baseUrl = ''): ApiClient {
             Accept: 'application/json',
             ...authHeaders,
           },
+          cache: 'no-store',
           body: JSON.stringify(payload),
         });
         let body: unknown = null;
@@ -327,6 +352,11 @@ export function createApiClient(baseUrl = ''): ApiClient {
               ? String((body as { detail?: unknown }).detail)
               : `Failed to start live session: ${response.status}`;
           liveSessionCreateDiagnostics.liveSessionCreateError = message;
+          liveSessionCreateDiagnostics.broadcastStartFailureClass =
+            response.status === 401 || response.status === 403
+              ? 'auth_failed'
+              : 'live_session_create_failed';
+          liveSessionCreateDiagnostics.lastFailureReason = `start_live_session_failed:${response.status}`;
           markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
           throw new Error(message);
         }
@@ -335,6 +365,8 @@ export function createApiClient(baseUrl = ''): ApiClient {
         liveSessionCreateDiagnostics.sessionIdAfterStartPreview = record?.session_id || null;
         if (!record?.session_id) {
           liveSessionCreateDiagnostics.liveSessionCreateError = 'missing_session_id';
+          liveSessionCreateDiagnostics.broadcastStartFailureClass = 'live_session_create_failed';
+          liveSessionCreateDiagnostics.lastFailureReason = 'missing_session_id';
           markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
           throw new Error('Live session start returned no session_id');
         }
@@ -342,7 +374,12 @@ export function createApiClient(baseUrl = ''): ApiClient {
         return record;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        liveSessionCreateDiagnostics.liveSessionCreateError = message;
+        if (!liveSessionCreateDiagnostics.liveSessionCreateError) {
+          liveSessionCreateDiagnostics.liveSessionCreateError = message;
+        }
+        if (!liveSessionCreateDiagnostics.broadcastStartFailureClass) {
+          liveSessionCreateDiagnostics.broadcastStartFailureClass = 'live_session_create_failed';
+        }
         markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
         throw error;
       }

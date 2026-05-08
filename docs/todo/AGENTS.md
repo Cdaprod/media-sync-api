@@ -1,3 +1,8 @@
+## 2026-05-08 — Restore startLiveSession auth-required diagnostics (new)
+- [x] Restored `requireNodeAuthHeaders(nodeId)` in `startLiveSession` so missing device auth is classified as `auth_required` before any durable session POST.
+- [x] Kept the clean one-method API wrapper shape while extending diagnostics with explicit auth/create failure classes and no helper/spread fragments.
+- [ ] Next validation item: rebuild the LAN Explorer bundle and then verify missing node auth reports `broadcastStartFailureClass: auth_required` without publishing an offer.
+
 ## 2026-05-08 — Replace startLiveSession method cleanly (new)
 - [x] Replaced the entire `startLiveSession` method with a thin API wrapper: one payload, one diagnostics object, one POST fetch, one durable record return.
 - [x] Removed the diagnostics helper/spread approach and locked static contracts against orphan spreads, duplicated diagnostics fragments, and `withLiveSessionCreateDiagnostics` calls.
