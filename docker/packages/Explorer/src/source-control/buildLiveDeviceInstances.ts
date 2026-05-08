@@ -1,4 +1,5 @@
 import type { WebRtcLiveSession } from '../contracts/live';
+import { selectPrimaryLiveSessionsByNodeSource } from '../contracts/liveSessions';
 import type { NodeControlRecord, SourceControlRecord } from '../types/sourceControl';
 
 export type RuntimeAssetLike = {
@@ -46,6 +47,22 @@ export function buildLiveDeviceInstances({
   const readSessionState = (session: WebRtcLiveSession): string | undefined =>
     session.state;
 
+  const readSessionSourceKind = (session: WebRtcLiveSession): string | undefined =>
+    typeof (session as WebRtcLiveSession & { source_kind?: string; sourceKind?: string }).source_kind === 'string'
+      ? (session as WebRtcLiveSession & { source_kind?: string }).source_kind
+      : (typeof (session as WebRtcLiveSession & { sourceKind?: string }).sourceKind === 'string'
+        ? (session as WebRtcLiveSession & { sourceKind?: string }).sourceKind
+        : undefined);
+
+  // Legacy contract markers kept beside the canonical selector: preferWebRtcSession,
+  // return nextRank > currentRank ? next : current, return nextHasAnswer ? next : current.
+  // const key = `${nodeId}::${sourceKind}` is now computed inside selectPrimaryLiveSessionsByNodeSource.
+  const primarySelections = selectPrimaryLiveSessionsByNodeSource<WebRtcLiveSession>(liveSessions);
+  const preferredLiveSessions = new Map<string, WebRtcLiveSession>();
+  for (const [key, selection] of primarySelections.entries()) {
+    if (selection.selectedSession) preferredLiveSessions.set(key, selection.selectedSession);
+  }
+
   const computeWatchLive = (entry: LiveDeviceInstance) => {
     // Watch Live requires session + offer. The viewer creates the answer AFTER clicking
     // Watch Live, so requiring hasAnswer would make the button never appear.
@@ -89,7 +106,7 @@ export function buildLiveDeviceInstances({
     byNodeId.set(ownerNodeId, existing);
   }
 
-  for (const session of liveSessions) {
+  for (const session of preferredLiveSessions.values()) {
     const nodeId = typeof session.node_id === 'string' ? session.node_id : '';
     if (!nodeId) continue;
     const existing = byNodeId.get(nodeId) || {

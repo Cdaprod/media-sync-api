@@ -9,8 +9,7 @@ import { shouldPollDeviceControlPlane, shouldPollLiveSurface } from '../../../sr
 // Local cameras enumeration
 // ----------------------------------------------------------------------
 export function useLocalCameras() {
-  // TODO(camera-session): CameraSession owns canonical local camera lifecycle.
-  // Keep this hook as compatibility inventory until FullscreenDevicePreview migration is complete.
+  // CameraSession owns the canonical local camera lifecycle. This hook must not request media permissions.
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [permission, setPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt');
 
@@ -37,14 +36,6 @@ export function useLocalCameras() {
 
   useEffect(() => {
     enumerate();
-    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
-      void navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-        .then((stream) => {
-          stream.getTracks().forEach((track) => track.stop());
-          return enumerate();
-        })
-        .catch(() => undefined);
-    }
     navigator.mediaDevices?.addEventListener('devicechange', enumerate);
     return () => navigator.mediaDevices?.removeEventListener('devicechange', enumerate);
   }, [enumerate]);

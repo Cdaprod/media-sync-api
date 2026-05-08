@@ -37,7 +37,7 @@ The UI is purely a **viewport** and control surface.
 | `DevicePickerSheet.tsx`      | Bottom sheet for selecting local cameras or remote Explorer nodes.             |
 | `DeviceCameraInfoModal.tsx`  | Modal displaying camera/session metadata.                                      |
 | `DeviceScopesPanel.tsx`      | Right‑side panel with histogram, vectorscope, waveform, and overlay toggles.   |
-| `deviceMonitorHooks.ts`      | Route‑local hooks: `useLocalCameras`, `useRemoteCameras`, `useWebGLFx`, telemetry drawing, `useAudioAnalyser`. |
+| `deviceMonitorHooks.ts`      | Route‑local monitor helpers: passive `useLocalCameras` enumeration, `useRemoteCameras`, `useWebGLFx`, telemetry drawing, `useAudioAnalyser`; no local camera permission requests. |
 | `deviceMonitorTypes.ts`      | Shared TypeScript interfaces.                                                  |
 | `device.css`                 | All styles (scoped to this route, imported by `layout.tsx`).                   |
 
@@ -86,7 +86,7 @@ All dimensions use `var(—ui-scale)`. Changing this variable in `device.css` wi
 
 ## Development notes
 
-- **Do not** add a second `getUserMedia` call. The stream always comes from `useLiveSession`.
+- **Do not** add a second `getUserMedia` call. The stream always comes from `useCameraSession`; monitor helper hooks must not call `getUserMedia`.
 - **Do not** add WebRTC logic inside these components. Keep signalling in `page.tsx`.
 - **Device‑specific camera selection** is currently a TODO. The “Pick Camera” button calls `onStartCamera()` without passing a device ID. Extending `useLiveSession` to support `startPreview(‘camera’, deviceId)` is the next step.
 - **Remote node selection** opens the selected node in a new tab (`/connect/device?node_id=...`). This matches the existing pattern for multi‑device workflows.

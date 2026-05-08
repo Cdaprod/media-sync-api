@@ -16,6 +16,9 @@ export type BroadcastFailureCode =
   | 'camera_not_found'
   | 'camera_not_readable'
   | 'live_session_failed'
+  | 'live_session_create_failed'
+  | 'auth_failed'
+  | 'auth_required'
   | 'missing_media_stream'
   | 'offer_publish_failed'
   | 'live_registry_mismatch'
@@ -45,28 +48,46 @@ export type BroadcastSnapshot = {
 export function describeBroadcastStage(snapshot: BroadcastSnapshot): string {
   if (snapshot.error) return `Failed: ${snapshot.error.message}`;
   switch (snapshot.stage) {
-    case 'camera_starting': return 'Starting camera';
-    case 'camera_ready': return 'Camera ready';
-    case 'live_session_starting': return 'Starting live session';
-    case 'live_session_ready': return 'Live session ready';
-    case 'peer_publishing': return 'Publishing peer offer';
-    case 'waiting_for_answer': return 'Waiting for Explorer answer';
-    case 'connected': return 'Connected';
-    case 'stopped': return 'Stopped';
-    case 'failed': return 'Failed';
-    default: return 'Idle';
+    case 'camera_starting':
+      return 'Starting camera';
+    case 'camera_ready':
+      return 'Camera ready';
+    case 'live_session_starting':
+      return 'Starting live session';
+    case 'live_session_ready':
+      return 'Live session ready';
+    case 'peer_publishing':
+      return 'Publishing peer offer';
+    case 'waiting_for_answer':
+      return 'Waiting for Explorer answer';
+    case 'connected':
+      return 'Connected';
+    case 'stopped':
+      return 'Stopped';
+    case 'failed':
+      return 'Failed';
+    default:
+      return 'Idle';
   }
 }
 
 export function isBroadcastBusy(stage: BroadcastStage): boolean {
-  return stage === 'camera_starting' || stage === 'live_session_starting' || stage === 'peer_publishing';
+  return (
+    stage === 'camera_starting' ||
+    stage === 'live_session_starting' ||
+    stage === 'peer_publishing'
+  );
 }
 
 export function isBroadcastLive(stage: BroadcastStage): boolean {
   return stage === 'waiting_for_answer' || stage === 'connected';
 }
 
-export function makeBroadcastFailure(code: BroadcastFailureCode, cause?: unknown): BroadcastFailure {
-  const text = cause instanceof Error ? cause.message : (cause ? String(cause) : undefined);
+export function makeBroadcastFailure(
+  code: BroadcastFailureCode,
+  cause?: unknown,
+): BroadcastFailure {
+  const text =
+    cause instanceof Error ? cause.message : cause ? String(cause) : undefined;
   return { code, message: code.replaceAll('_', ' '), cause: text };
 }

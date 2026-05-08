@@ -127,6 +127,29 @@ def _session_service(runtime: AppRuntime):
     return service
 
 
+def _stamp_live_session_owner_debug(runtime: AppRuntime, response: Response) -> None:
+    registry = runtime.services.live_session_registry
+    service = runtime.services.live_session_service
+    response.headers["X-Live-Session-Registry-Id"] = str(id(registry)) if registry is not None else "none"
+    response.headers["X-Live-Session-Service-Id"] = str(id(service)) if service is not None else "none"
+    if service is not None and getattr(service, "session_registry", None) is not None:
+        response.headers["X-Live-Session-Service-Registry-Id"] = str(id(service.session_registry))
+
+
+
+
+def _prune_stale_live_sessions(runtime: AppRuntime) -> list[str]:
+    service = runtime.services.live_session_service
+    if service is None:
+        return []
+    pruned_ids = service.prune_stale_sessions()
+    live_registry = getattr(runtime, "live_sessions", None)
+    for session_id in pruned_ids:
+        delete = getattr(live_registry, "delete", None)
+        if callable(delete):
+            delete(session_id)
+    return pruned_ids
+
 def _ensure_node(runtime: AppRuntime, node_id: str) -> None:
     registry = runtime.services.node_registry
     if registry is None:
@@ -282,9 +305,11 @@ def _normalize_filename(filename: str | None, recording_id: str) -> str:
 @router.post("/start", response_model=LiveSessionResponse)
 async def start_live_session(
     payload: StartLiveSessionRequest,
+    response: Response,
     ctx: RuntimeDeviceAuthContext = Depends(require_device_scope("live:write")),
     runtime: AppRuntime = Depends(get_runtime),
 ) -> LiveSessionResponse:
+    _stamp_live_session_owner_debug(runtime, response)
     _ensure_node(runtime, ctx.node_id)
     payload = payload.model_copy(update={"node_id": ctx.node_id})
     session = _session_service(runtime).start_session(
@@ -298,9 +323,11 @@ async def start_live_session(
 @router.post("/{session_id}/heartbeat", response_model=LiveSessionResponse)
 async def heartbeat_live_session(
     session_id: str,
+    response: Response,
     ctx: RuntimeDeviceAuthContext = Depends(require_device_scope("live:write")),
     runtime: AppRuntime = Depends(get_runtime),
 ) -> LiveSessionResponse:
+    _stamp_live_session_owner_debug(runtime, response)
     _require_session_owner(runtime, session_id, ctx.node_id)
     try:
         session = _session_service(runtime).heartbeat(session_id)
@@ -430,7 +457,9 @@ async def upload_live_session_recording(
 
 
 @router.get("", response_model=list[LiveSessionResponse])
-async def list_live_sessions(runtime: AppRuntime = Depends(get_runtime)) -> list[LiveSessionResponse]:
+async def list_live_sessions(response: Response, runtime: AppRuntime = Depends(get_runtime)) -> list[LiveSessionResponse]:
+    _stamp_live_session_owner_debug(runtime, response)
+    _prune_stale_live_sessions(runtime)
     registry = runtime.services.live_session_registry
     if registry is None:
         return []
@@ -440,8 +469,10 @@ async def list_live_sessions(runtime: AppRuntime = Depends(get_runtime)) -> list
 @router.get("/{session_id}", response_model=LiveSessionResponse)
 async def get_live_session(
     session_id: str,
+    response: Response,
     runtime: AppRuntime = Depends(get_runtime),
 ) -> LiveSessionResponse:
+    _stamp_live_session_owner_debug(runtime, response)
     registry = runtime.services.live_session_registry
     if registry is None:
         raise HTTPException(status_code=503, detail="Live session registry is unavailable")
@@ -486,9 +517,11 @@ async def acknowledge_live_session_control(
 async def publish_live_signal_offer(
     session_id: str,
     payload: LiveSignalOfferRequest,
+    response: Response,
     ctx: RuntimeDeviceAuthContext = Depends(require_device_scope("live:write")),
     runtime: AppRuntime = Depends(get_runtime),
 ) -> LiveSignalStateResponse:
+    _stamp_live_session_owner_debug(runtime, response)
     _require_session_owner(runtime, session_id, ctx.node_id)
     offer_payload = payload.offer.model_dump(mode="python")
     try:
@@ -503,8 +536,10 @@ async def publish_live_signal_offer(
 async def publish_live_signal_answer(
     session_id: str,
     payload: LiveSignalAnswerRequest,
+    response: Response,
     runtime: AppRuntime = Depends(get_runtime),
 ) -> LiveSignalStateResponse:
+    _stamp_live_session_owner_debug(runtime, response)
     answer_payload = payload.answer.model_dump(mode="python")
     viewer_key = (payload.viewer_id or "viewer-default").strip() or "viewer-default"
     try:
@@ -524,10 +559,12 @@ async def publish_live_signal_ice(
     session_id: str,
     payload: LiveSignalIceRequest,
     request: Request,
+    response: Response,
     authorization: str | None = Header(default=None),
     x_media_sync_node_id: str | None = Header(default=None),
     runtime: AppRuntime = Depends(get_runtime),
 ) -> LiveSignalStateResponse:
+    _stamp_live_session_owner_debug(runtime, response)
     if payload.role == "device":
         ctx = require_registered_node(
             request=request,
@@ -555,9 +592,11 @@ async def publish_live_signal_ice(
 @router.get("/{session_id}/signal", response_model=LiveSignalStateResponse)
 async def get_live_signal_state(
     session_id: str,
+    response: Response,
     viewer_id: str | None = None,
     runtime: AppRuntime = Depends(get_runtime),
 ) -> LiveSignalStateResponse:
+    _stamp_live_session_owner_debug(runtime, response)
     try:
         state = _session_service(runtime).get_signal_state(session_id, viewer_id)
     except ValueError as exc:

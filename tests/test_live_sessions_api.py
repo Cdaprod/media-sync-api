@@ -141,8 +141,100 @@ def test_live_session_list_drops_stale_active_sessions(client):
     listed = client.get("/api/live_sessions")
     assert listed.status_code == 200
     assert listed.json() == []
-    assert registry.get("sess-stale") is None
+    pruned = registry.require("sess-stale")
+    assert pruned.status == "ended"
+    assert pruned.metadata["stale_prune_reason"] == "active_session_ttl_expired"
 
+
+def test_live_session_service_prunes_stale_preview_connected_and_waiting_sessions(client):
+    runtime = client.app.state.runtime
+    service = runtime.services.live_session_service
+    registry = runtime.services.live_session_registry
+    assert service is not None
+    assert registry is not None
+    now = datetime.now(timezone.utc)
+    stale_at = (now - timedelta(seconds=90)).isoformat()
+    fresh_at = now.isoformat()
+    for session_id, status in (
+        ("sess-stale-preview", "previewing"),
+        ("sess-stale-connected", "connected"),
+        ("sess-stale-waiting", "waiting_for_answer"),
+    ):
+        registry.upsert(
+            LiveSession(
+                session_id=session_id,
+                node_id="runner-prune",
+                source_kind="camera",
+                status=status,
+                started_at=stale_at,
+                last_heartbeat_at=stale_at,
+                chunk_count=0,
+            )
+        )
+        service.signal_state_by_session[session_id] = {"updated_at": stale_at}
+    registry.upsert(
+        LiveSession(
+            session_id="sess-fresh-preview",
+            node_id="runner-prune",
+            source_kind="camera",
+            status="previewing",
+            started_at=fresh_at,
+            last_heartbeat_at=fresh_at,
+            chunk_count=0,
+        )
+    )
+
+    pruned = service.prune_stale_sessions(now=now)
+
+    assert pruned == ["sess-stale-preview", "sess-stale-connected", "sess-stale-waiting"]
+    for session_id in pruned:
+        session = registry.require(session_id)
+        assert session.status == "ended"
+        assert session.metadata["stale_prune_reason"] == "active_session_ttl_expired"
+        assert session_id not in service.signal_state_by_session
+    assert registry.require("sess-fresh-preview").status == "previewing"
+
+
+def test_live_routes_prune_stale_durable_and_webrtc_sessions(client):
+    runtime = client.app.state.runtime
+    registry = runtime.services.live_session_registry
+    live_registry = runtime.live_sessions
+    assert registry is not None
+    stale_at = (datetime.now(timezone.utc) - timedelta(seconds=90)).isoformat()
+    fresh_at = datetime.now(timezone.utc).isoformat()
+    stale = LiveSession(
+        session_id="sess-stale-webrtc-bridge",
+        node_id="runner-stale-webrtc",
+        source_kind="camera",
+        status="previewing",
+        started_at=stale_at,
+        last_heartbeat_at=stale_at,
+        chunk_count=0,
+    )
+    fresh = LiveSession(
+        session_id="sess-fresh-webrtc-bridge",
+        node_id="runner-fresh-webrtc",
+        source_kind="camera",
+        status="previewing",
+        started_at=fresh_at,
+        last_heartbeat_at=fresh_at,
+        chunk_count=0,
+    )
+    registry.upsert(stale)
+    registry.upsert(fresh)
+    live_registry.create(session_id=stale.session_id, node_id=stale.node_id)
+    live_registry.set_offer(stale.session_id, {"type": "offer", "sdp": "v=0"})
+    live_registry.create(session_id=fresh.session_id, node_id=fresh.node_id)
+    live_registry.set_offer(fresh.session_id, {"type": "offer", "sdp": "v=0"})
+
+    listed = client.get("/api/live")
+
+    assert listed.status_code == 200
+    session_ids = [entry["session_id"] for entry in listed.json()["sessions"]]
+    assert stale.session_id not in session_ids
+    assert fresh.session_id in session_ids
+    assert live_registry.get(stale.session_id) is None
+    assert registry.require(stale.session_id).status == "ended"
 
 def test_live_session_control_updates_desired_action(client):
     node_id, token = _register_node_auth(client, "runner-live-3")
@@ -287,3 +379,156 @@ def test_live_session_signal_isolates_multiple_viewers(client):
     assert end.status_code == 200
     after_end_signal = client.get(f"/api/live_sessions/{session_id}/signal", params={"viewer_id": "viewer-a"})
     assert after_end_signal.status_code == 404
+
+def test_live_session_registry_owner_consistent_across_start_read_signal_and_heartbeat(client):
+    node_id, token = _register_node_auth(client, "runner-live-owner")
+    headers = _auth_headers(node_id, token)
+
+    started = client.post(
+        "/api/live_sessions/start",
+        json={"node_id": node_id, "source_kind": "camera", "metadata": {"origin": "owner-test"}},
+        headers=headers,
+    )
+    assert started.status_code == 200
+    session_id = started.json()["session_id"]
+    registry_id = started.headers["x-live-session-registry-id"]
+    service_registry_id = started.headers["x-live-session-service-registry-id"]
+    assert registry_id == service_registry_id
+
+    fetched = client.get(f"/api/live_sessions/{session_id}")
+    assert fetched.status_code == 200
+    assert fetched.headers["x-live-session-registry-id"] == registry_id
+
+    signal_initial = client.get(f"/api/live_sessions/{session_id}/signal", params={"viewer_id": "viewer-owner"})
+    assert signal_initial.status_code == 200
+    assert signal_initial.headers["x-live-session-registry-id"] == registry_id
+
+    offer = client.post(
+        f"/api/live_sessions/{session_id}/signal/offer",
+        json={"offer": {"type": "offer", "sdp": "v=0\r\no=owner-offer"}},
+        headers=headers,
+    )
+    assert offer.status_code == 200
+    assert offer.headers["x-live-session-registry-id"] == registry_id
+
+    signal_after_offer = client.get(f"/api/live_sessions/{session_id}/signal", params={"viewer_id": "viewer-owner"})
+    assert signal_after_offer.status_code == 200
+    assert signal_after_offer.json()["offer"]["sdp"] == "v=0\r\no=owner-offer"
+
+    answer = client.post(
+        f"/api/live_sessions/{session_id}/signal/answer",
+        json={"viewer_id": "viewer-owner", "answer": {"type": "answer", "sdp": "v=0\r\no=owner-answer"}},
+    )
+    assert answer.status_code == 200
+    assert answer.headers["x-live-session-registry-id"] == registry_id
+
+    viewer_ice = client.post(
+        f"/api/live_sessions/{session_id}/signal/ice",
+        json={"role": "viewer", "viewer_id": "viewer-owner", "candidate": {"candidate": "viewer-owner-ice"}},
+    )
+    assert viewer_ice.status_code == 200
+    assert viewer_ice.headers["x-live-session-registry-id"] == registry_id
+
+    signal_after_viewer = client.get(f"/api/live_sessions/{session_id}/signal", params={"viewer_id": "viewer-owner"})
+    assert signal_after_viewer.status_code == 200
+    assert signal_after_viewer.json()["answer"]["sdp"] == "v=0\r\no=owner-answer"
+    assert signal_after_viewer.json()["ice_from_viewer"][0]["candidate"] == "viewer-owner-ice"
+
+    heartbeat = client.post(f"/api/live_sessions/{session_id}/heartbeat", headers=headers)
+    assert heartbeat.status_code == 200
+    assert heartbeat.headers["x-live-session-registry-id"] == registry_id
+
+    fetched_after_heartbeat = client.get(f"/api/live_sessions/{session_id}")
+    assert fetched_after_heartbeat.status_code == 200
+    assert fetched_after_heartbeat.headers["x-live-session-registry-id"] == registry_id
+
+
+def test_starting_second_live_session_supersedes_previous_active_same_node_source(client):
+    node_id, token = _register_node_auth(client, "runner-live-supersede")
+    headers = _auth_headers(node_id, token)
+
+    first = client.post(
+        "/api/live_sessions/start",
+        json={"node_id": node_id, "source_kind": "camera"},
+        headers=headers,
+    )
+    assert first.status_code == 200
+    first_id = first.json()["session_id"]
+
+    second = client.post(
+        "/api/live_sessions/start",
+        json={"node_id": node_id, "source_kind": "camera"},
+        headers=headers,
+    )
+    assert second.status_code == 200
+    second_id = second.json()["session_id"]
+    assert second_id != first_id
+
+    listed = client.get("/api/live_sessions")
+    assert listed.status_code == 200
+    active_ids = [entry["session_id"] for entry in listed.json()]
+    assert active_ids == [second_id]
+
+    old = client.get(f"/api/live_sessions/{first_id}")
+    assert old.status_code == 200
+    assert old.json()["status"] == "ended"
+    assert old.json()["metadata"]["superseded_by_session_id"] == second_id
+
+    signal = client.get(f"/api/live_sessions/{second_id}/signal", params={"viewer_id": "viewer-current"})
+    assert signal.status_code == 200
+
+    heartbeat = client.post(f"/api/live_sessions/{second_id}/heartbeat", headers=headers)
+    assert heartbeat.status_code == 200
+    assert heartbeat.json()["session_id"] == second_id
+
+
+def test_superseded_live_session_heartbeat_does_not_resurrect_old_active_candidate(client):
+    node_id, token = _register_node_auth(client, "runner-live-supersede-heartbeat")
+    headers = _auth_headers(node_id, token)
+
+    first = client.post(
+        "/api/live_sessions/start",
+        json={"node_id": node_id, "source_kind": "camera"},
+        headers=headers,
+    )
+    assert first.status_code == 200
+    first_id = first.json()["session_id"]
+
+    second = client.post(
+        "/api/live_sessions/start",
+        json={"node_id": node_id, "source_kind": "camera"},
+        headers=headers,
+    )
+    assert second.status_code == 200
+    second_id = second.json()["session_id"]
+
+    resurrect = client.post(f"/api/live_sessions/{first_id}/heartbeat", headers=headers)
+    assert resurrect.status_code == 404
+
+    listed = client.get("/api/live_sessions")
+    assert listed.status_code == 200
+    assert [entry["session_id"] for entry in listed.json()] == [second_id]
+
+
+def test_viewer_runtime_signal_events_do_not_become_durable_live_sessions(client):
+    session_id = "sess-runtime-event-not-durable"
+    client.post(
+        f"/api/live/{session_id}/offer",
+        json={"node_id": "node-runtime-event-not-durable", "offer": {"type": "offer", "sdp": "v=0\r\no=offer"}},
+    )
+    client.post(
+        f"/api/live/{session_id}/viewers/viewer-runtime/answer",
+        json={"answer": {"type": "answer", "sdp": "v=0\r\no=answer"}},
+    )
+    client.post(
+        f"/api/live/{session_id}/viewers/viewer-runtime/state",
+        json={"state": "answer_confirmed"},
+    )
+    client.post(
+        f"/api/live/{session_id}/viewers/viewer-runtime/ice",
+        json={"candidate": {"candidate": "candidate-viewer-runtime"}},
+    )
+
+    durable = client.get("/api/live_sessions")
+    assert durable.status_code == 200
+    assert all(entry["session_id"] != session_id for entry in durable.json())

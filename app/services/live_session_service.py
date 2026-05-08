@@ -8,7 +8,7 @@ Example:
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +37,21 @@ def _stable_candidate_key(candidate: dict[str, Any]) -> str:
 
 
 SIGNAL_STALE_SECONDS = 90
+LIVE_SESSION_ACTIVE_TTL_SECONDS = 60
+STALE_LIVE_SESSION_STATUSES = {"previewing", "recording", "waiting_for_answer", "connected"}
+
+
+def _parse_utc_iso(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
 
 
 def _signal_default_state(now: str) -> dict[str, Any]:
@@ -64,6 +79,44 @@ class LiveSessionService:
         self.ingest_claim_service = ingest_claim_service
         self.signal_state_by_session: dict[str, dict[str, Any]] = {}
 
+
+    def prune_stale_sessions(self, now: datetime | None = None) -> list[str]:
+        """End stale active live sessions and return pruned session ids."""
+
+        current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+        cutoff = current - timedelta(seconds=LIVE_SESSION_ACTIVE_TTL_SECONDS)
+        pruned: list[str] = []
+        for session in self.session_registry.list_all():
+            if session.status not in STALE_LIVE_SESSION_STATUSES:
+                continue
+            last_heartbeat = _parse_utc_iso(session.last_heartbeat_at)
+            if last_heartbeat is not None and last_heartbeat >= cutoff:
+                continue
+            pruned.append(session.session_id)
+            ended_at = current.isoformat()
+            self.session_registry.upsert(
+                LiveSession(
+                    session_id=session.session_id,
+                    node_id=session.node_id,
+                    source_kind=session.source_kind,
+                    status="ended",
+                    started_at=session.started_at,
+                    last_heartbeat_at=ended_at,
+                    chunk_count=session.chunk_count,
+                    claim_id=session.claim_id,
+                    latest_chunk_path=session.latest_chunk_path,
+                    desired_action=None,
+                    last_control_at=session.last_control_at,
+                    metadata={
+                        **dict(session.metadata),
+                        "stale_pruned_at": ended_at,
+                        "stale_prune_reason": "active_session_ttl_expired",
+                    },
+                )
+            )
+            self.signal_state_by_session.pop(session.session_id, None)
+        return pruned
+
     def start_session(
         self,
         *,
@@ -71,8 +124,31 @@ class LiveSessionService:
         source_kind: LiveSourceKind,
         metadata: dict[str, Any] | None = None,
     ) -> LiveSession:
+        self.prune_stale_sessions()
         now = _utc_now_iso()
         session_id = f"sess-{uuid.uuid4().hex}"
+        for existing in self.session_registry.list_all():
+            if (
+                existing.node_id == node_id
+                and existing.source_kind == source_kind
+                and existing.status in STALE_LIVE_SESSION_STATUSES
+            ):
+                self.session_registry.upsert(
+                    LiveSession(
+                        session_id=existing.session_id,
+                        node_id=existing.node_id,
+                        source_kind=existing.source_kind,
+                        status="ended",
+                        started_at=existing.started_at,
+                        last_heartbeat_at=existing.last_heartbeat_at,
+                        chunk_count=existing.chunk_count,
+                        claim_id=existing.claim_id,
+                        latest_chunk_path=existing.latest_chunk_path,
+                        desired_action=existing.desired_action,
+                        last_control_at=existing.last_control_at,
+                        metadata={**dict(existing.metadata), "superseded_by_session_id": session_id},
+                    )
+                )
         session = LiveSession(
             session_id=session_id,
             node_id=node_id,
@@ -92,6 +168,8 @@ class LiveSessionService:
 
     def heartbeat(self, session_id: str) -> LiveSession:
         session = self.session_registry.require(session_id)
+        if session.status == 'ended' or dict(session.metadata).get('superseded_by_session_id'):
+            raise ValueError(f"Live session '{session_id}' is not active")
         updated = LiveSession(
             session_id=session.session_id,
             node_id=session.node_id,

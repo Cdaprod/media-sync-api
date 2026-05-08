@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 LiveSourceKind = Literal["camera", "screen"]
-LiveSessionStatus = Literal["idle", "previewing", "recording", "ended"]
+LiveSessionStatus = Literal["idle", "previewing", "recording", "waiting_for_answer", "connected", "ended"]
 LiveSessionControlAction = Literal["start_recording", "stop_recording"]
 
 
@@ -40,4 +40,4 @@ class LiveSession:
 
     @property
     def is_active(self) -> bool:
-        return self.status in {"previewing", "recording"}
+        return self.status in {"previewing", "recording", "waiting_for_answer", "connected"}

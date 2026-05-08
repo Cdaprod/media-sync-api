@@ -1,6 +1,7 @@
 import React from 'react';
 
 import type { WebRtcLiveSession } from '../contracts/live';
+import { selectPrimaryLiveSessionsByNodeSource } from '../contracts/liveSessions';
 import type { NodeControlRecord, SourceControlRecord } from '../types/sourceControl';
 import { buildRuntimeChips } from '../utils/runtimeChips';
 import { buildLiveDeviceInstances, type RuntimeAssetLike } from './buildLiveDeviceInstances';
@@ -50,8 +51,10 @@ export function SourceControlPanels({
   });
 
   const webRtcSessionsByNodeId = new Map<string, WebRtcLiveSession>();
-  for (const session of webRtcLiveSessions) {
-    if (session.node_id) webRtcSessionsByNodeId.set(session.node_id, session);
+  const primaryWebRtcSelections = selectPrimaryLiveSessionsByNodeSource<WebRtcLiveSession>(webRtcLiveSessions);
+  for (const selection of primaryWebRtcSelections.values()) {
+    const session = selection.selectedSession;
+    if (session?.node_id) webRtcSessionsByNodeId.set(session.node_id, session);
   }
 
   if (sourceControlLoading) {

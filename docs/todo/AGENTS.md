@@ -1,3 +1,217 @@
+## 2026-05-08 — Add scoped fetch syntax regression guard (new)
+- [x] Added an explicit static contract that `startLiveSession` opens the durable `/api/live_sessions/start` `fetch(...)` request block immediately after broadcast diagnostics.
+- [x] Locked direct negative assertions for orphan `headers:` and `method: 'POST'` blocks after `markConnectDeviceBroadcastDebug(...)`.
+- [ ] Next validation item: restart/rebuild the actual LAN Explorer container and confirm `cda-desktop.local` serves this committed `api.ts`.
+
+## 2026-05-08 — Harden API live-session cluster paste guards (new)
+- [x] Aligned `startLiveSession` missing-session validation with the repaired cluster body and kept the durable start request options inside the single `fetch(...)` call.
+- [x] Extended static guards to reject duplicated pasted `api.ts` module bodies and to lock `startLiveSession -> getLiveSession -> controlLiveSession -> sendLiveSessionControl -> uploadLiveSessionRecording` ordering.
+- [ ] Next validation item: restart/rebuild the LAN Explorer server from this commit and confirm the browser is not serving a stale corrupted bundle.
+
+## 2026-05-08 — Replace corrupted Explorer API live-session method cluster (new)
+- [x] Replaced `startLiveSession`, `getLiveSession`, and `controlLiveSession` as a single contiguous `createApiClient` cluster so the durable start request options cannot float outside `fetch(...)`.
+- [x] Added a dedicated static guard that requires the durable start fetch opener exactly once and verifies request headers are inside that fetch call.
+- [ ] Next validation item: rebuild the LAN Explorer process from this commit and verify the browser is no longer serving a stale `src/api.ts` bundle.
+
+## 2026-05-08 — Guard startLiveSession fetch opener integrity (new)
+- [x] Added static contract coverage that `startLiveSession` keeps the durable create `fetch(...)` opener directly after the diagnostics marker.
+- [x] Locked regression checks against orphaned `method`, `headers`, `cache`, or `body` request-option blocks floating after `markConnectDeviceBroadcastDebug(...)`.
+- [ ] Next validation item: rebuild the deployed Explorer bundle on the LAN host and verify Safari no longer shows the stale `headers:` syntax overlay.
+
+## 2026-05-08 — Repair live-session method block replacement (new)
+- [x] Replaced the full `createApiClient` live-session section from `startLiveSession` through `sendLiveSessionControl` with the corrected contiguous object-method block.
+- [x] Restored parsed error payload handling for `getLiveSession`, `controlLiveSession`, and `sendLiveSessionControl` while keeping WebRTC/ICE/rendering logic untouched.
+- [ ] Next validation item: rebuild the deployed Explorer bundle on the LAN host and verify the stale `method: 'POST'` orphan syntax overlay is gone.
+
+## 2026-05-08 — Repair Explorer API client contract (new)
+- [x] Added `ApiClient.getJson` to match the `createApiClient` returned object contract.
+- [x] Replaced `startLiveSession` with a single-try durable create flow that records complete diagnostics, classifies auth/create failures, validates `session_id`, and restores `getLiveSession`/`controlLiveSession` method boundaries.
+- [x] Extended Explorer static contracts for `getJson`, durable `/api/live_sessions/start` POST shape, method ordering, and stray response-handling regression guards.
+- [ ] Next validation item: verify real Connect Device Start Broadcast reports durable create diagnostics without regressing WebRTC viewer/publisher lanes.
+
+## 2026-05-08 — Reapply clean startLiveSession API repair (new)
+- [x] Replaced `startLiveSession` in `src/api.ts` again with the full clean compiling method body, including the outer network `try/catch`, complete diagnostics fields, and `requireNodeAuthHeaders` auth-required path.
+- [x] Removed unused node-auth imports from `api.ts` so the API wrapper remains thin and easier to inspect during build failures.
+- [ ] Next validation item: use the Explorer build output to confirm `src/api.ts` compiles, then resume Connect Device broadcast runtime testing.
+
+## 2026-05-08 — Verify startLiveSession method boundary (new)
+- [x] Locked static contracts that `startLiveSession` ends before `getLiveSession`/`controlLiveSession` and contains no loose control-session response handling.
+- [x] Reconfirmed `controlLiveSession` remains a standalone API client method after the durable live-session create wrapper.
+- [ ] Next validation item: rebuild the LAN Explorer bundle from the latest commit and continue Connect Device runtime testing once the overlay is gone.
+
+## 2026-05-08 — Restore startLiveSession auth-required diagnostics (new)
+- [x] Restored `requireNodeAuthHeaders(nodeId)` in `startLiveSession` so missing device auth is classified as `auth_required` before any durable session POST.
+- [x] Kept the clean one-method API wrapper shape while extending diagnostics with explicit auth/create failure classes and no helper/spread fragments.
+- [ ] Next validation item: rebuild the LAN Explorer bundle and then verify missing node auth reports `broadcastStartFailureClass: auth_required` without publishing an offer.
+
+## 2026-05-08 — Replace startLiveSession method cleanly (new)
+- [x] Replaced the entire `startLiveSession` method with a thin API wrapper: one payload, one diagnostics object, one POST fetch, one durable record return.
+- [x] Removed the diagnostics helper/spread approach and locked static contracts against orphan spreads, duplicated diagnostics fragments, and `withLiveSessionCreateDiagnostics` calls.
+- [ ] Next validation item: rebuild the LAN Explorer bundle from this commit and verify the old line 282-310 syntax overlay is gone.
+
+## 2026-05-08 — Remove live-session diagnostics spreads from API method (new)
+- [x] Removed every diagnostics spread from `startLiveSession` and copied diagnostic fields explicitly into `markConnectDeviceBroadcastDebug` payloads so no orphan spread can be emitted by merge edits.
+- [x] Updated static contracts to reject both `...liveSessionCreateDiagnostics` and `...getLiveSessionCreateDiagnosticsPatch()` inside the durable start method.
+- [ ] Next validation item: rebuild the LAN Explorer bundle and confirm `src/api.ts` no longer reports an expression-expected syntax error near diagnostics.
+
+## 2026-05-08 — Durable live-session API syntax repair (new)
+- [x] Refactored `startLiveSession` diagnostics into an assigned `liveSessionCreateDiagnostics` object so diagnostic key/value pairs cannot appear as naked statements in the function body.
+- [x] Added static contract checks for the assigned diagnostics object and spread usage around `/api/live_sessions/start`.
+- [ ] Next validation item: rerun the Next.js Explorer build on the LAN host and confirm `src/api.ts` no longer reports a syntax failure around `startLiveSession`.
+
+## 2026-05-07 — Connect Device durable live-session creation gate (new)
+- [x] Made `useLiveSession.startPreview` rethrow durable `/api/live_sessions/start` failures after preserving the camera preview, so Connect Device can classify auth/create failures and skip WebRTC offer publication.
+- [x] Hardened `handleStartBroadcast` ordering around durable session creation: camera ready, durable create, session id validation, runtime/session publication, Explorer refresh, then peer offer.
+- [x] Added runtime guards and static contracts proving `publishPeerOffer`, `setActiveRuntimeSession`, and `publishBrowserRuntimeSession` cannot run without a durable `session_id`, while `/api/live` offers remain diagnostic-only.
+- [ ] Next validation item: on a real Connect Device tab, clear node auth and confirm Start Broadcast leaves camera preview alive, peer status idle, stage failed, and `broadcastStartFailureClass: auth_required` with no offer posted.
+
+## 2026-05-07 — Durable-only live cards for WebRTC offers (new)
+- [x] Kept `/api/live_sessions` as the only source of LiveSourceCard render authority; `/api/live` WebRTC offer inventory now only annotates matching durable session ids.
+- [x] Classified `/api/live` offers with no durable record as diagnostic-only `webRtcOnlyOfferSessions` so they cannot use `/api/live_sessions/{id}/signal` and 404/reload-loop as synthetic cards.
+- [x] Added Explorer static contracts to lock durable-id-gated WebRTC signal overlays, diagnostic-only WebRTC-only offer ids, and LiveSourceCard rendering exclusively from `livePanelSessions`.
+- [ ] Next validation item: reproduce stale `/api/live` offer without durable `/api/live_sessions` record and confirm Explorer debug lists it under `webRtcOnlyOfferSessionIds` while rendering no watchable LiveSourceCard.
+
+## 2026-05-07 — Connect Device single local camera owner (new)
+- [x] Consolidated local camera ownership under `useCameraSession`; it remains the only Connect Device module allowed to call `getUserMedia` and owns stream, permission, device inventory, selected/active device ids, start, stop, and refresh.
+- [x] Converted `deviceMonitorHooks.useLocalCameras` into passive enumerate-only compatibility inventory with an explicit no-permission-request contract.
+- [x] Updated `FullscreenDevicePreview` to use `cameraState.devices` and `cameraState.permission` as canonical local camera picker/permission inputs, avoiding a second local camera surface.
+- [x] Added static contracts covering the single local camera owner model and docs/readme guard against a second monitor-hook `getUserMedia` path.
+- [ ] Next validation item: on iPhone Safari, search for `getUserMedia(` should show only `useCameraSession` and non-runtime docs/tests, then confirm camera labels refresh after explicit camera start.
+
+## 2026-05-07 — Connect Device monitor controls + broadcast creation diagnostics (new)
+- [x] Restored Connect Device monitor top/bottom controls from active local `MediaStream` ownership instead of live-session state, so camera-ready previews keep Record/Start Broadcast/Fullscreen/Explorer/Switch controls visible even when no session exists.
+- [x] Restricted Stop Broadcast visibility to real broadcast sessions and changed stop handling to close publisher/polling/session bookkeeping without stopping the local camera preview.
+- [x] Hardened broadcast start so live-session creation failures are classified before peer creation, publish/runtime registration are skipped without `session_id`, Explorer refresh fires only after session/offer success, and `__connectDeviceBroadcastDebug` records create-attempt diagnostics.
+- [x] Updated Explorer static contracts for stream-owned monitor controls, stop-broadcast camera preservation, live-session creation failure diagnostics, and session-id-gated publish/runtime registration.
+- [ ] Next validation item: on iPhone Safari with missing/bad node auth, confirm `Heartbeat: auth_failed` remains badge-only while the local camera monitor controls stay visible and Start Broadcast reports `live_session_create_failed`/`auth_failed` diagnostics.
+
+## 2026-05-07 — Connect Device publisher sender-bound offer patch (new)
+- [x] Refactored Connect Device publisher transceiver setup so live camera/audio `MediaStreamTrack`s are passed directly to `peer.addTransceiver(track, { direction: 'sendonly', streams: [stream] })` before `createOffer()`.
+- [x] Updated publisher track reconciliation to match transceivers by `sender.track?.kind` first, fall back to receiver kind only when needed, force `sendonly`, and `replaceTrack(track)` whenever the active sender track id differs.
+- [x] Added publisher sender binding diagnostics (`publisherVideoSenderTrackId`, `publisherAudioSenderTrackId`, `publisherVideoSenderReadyState`, `publisherVideoSenderEnabled`, `publisherSenderBoundBeforeOffer`, `offerHasVideoSendonly`, `offerHasAudioSendonly`) to prove RTP senders are bound before offer publication.
+- [x] Changed Stop Broadcast to close the WebRTC publisher and stop preview bookkeeping without calling `stopCamera()`, preserving the camera track for live RTP debugging/rebroadcast.
+- [ ] Next validation item: on iPhone, confirm publisher `senderTrackIds` includes the live camera video track before offer creation and Explorer moves from `video_receiver_exists_but_no_inbound_rtp` to inbound video bytes/decoded frames.
+
+## 2026-05-07 — Explorer WebRTC viewer composite stream assembly (new)
+- [x] Changed `LiveSourceCard` viewer media authority to maintain one actor-owned composite `MediaStream` and reconcile it from `RTCPeerConnection.getReceivers()` plus `ontrack`, instead of trusting `event.streams[0]` as preview source truth.
+- [x] Rebound top preview and peer video surfaces from the composite stream across `setRemoteDescription`, `ontrack`, answer confirmation, and RTP stats polling so audio-only partial streams cannot replace the displayed video stream.
+- [x] Guarded viewer recvonly transceiver creation by missing media kind and only adds fallback recvonly transceivers when the incoming offer lacks that media section, preventing duplicate video/audio receiver pairs after remote offer application.
+- [x] Added diagnostics for composite track counts/ids, receiver track kinds/ids, live/ended video receiver counts, attach reason, `receiver_video_not_in_composite_stream`, and `video_receiver_exists_but_no_inbound_rtp`.
+- [ ] Next validation item: on the real iPhone + Explorer flow, confirm `remoteCompositeVideoTrackCount > 0`, `liveVideoTrackCount > 0`, `inboundVideoBytesReceived > 0`, and `inboundVideoFramesDecoded > 0` with no duplicate viewer receiver pairs.
+
+## 2026-05-07 — WebRTC stale live-session pruning + rendered-frame success gate (new)
+- [x] Added `LiveSessionService.prune_stale_sessions(...)` to end active preview/recording/waiting/connected sessions whose heartbeat exceeds the live-session TTL and clear their signal state without resurrecting superseded sessions.
+- [x] Wired stale-session pruning through durable live-session list/start routes and WebRTC `/api/live` listing so stale durable sessions remove their bridged WebRTC runtime entries.
+- [x] Hardened `/api/live/{session_id}/offer` to remove older same-node WebRTC transport shells before publishing the current offer, keeping one visible canonical live surface per device node.
+- [x] Added backend coverage for explicit service pruning, durable/WebRTC bridge pruning, stale metadata, and fresh-session preservation.
+- [ ] Next validation item: with one Device tab and one Explorer tab, `/api/live` should report one current session for the node after TTL cleanup; then verify Explorer only enables preview success when `decodedFramesRenderable=true` and visible video layout dimensions are nonzero.
+
+## 2026-05-07 — Explorer WebRTC visible video surface patch (new)
+- [x] Routed decoded WebRTC `MediaStream` playback through a real visible `<video>` in the top Live preview whenever a remote stream or track exists, keeping chunk-preview `<img>` fallback only for non-WebRTC preview chunks.
+- [x] Added one shared viewer video callback ref that applies Safari-safe video attributes before assigning `srcObject`, reuses existing stream attachments, avoids `video.load()`, and keeps tap-to-play retry on the attached stream.
+- [x] Added render-surface diagnostics (`topPreviewUsesVideo`, mounted/layout/computed style fields, `decodedFramesRenderable`, and `renderSurfaceFailureReason`) so decoded-frame paint failures can be diagnosed without relying only on `videoWidth`/`videoHeight`.
+- [x] Updated Explorer static contracts to lock the visible top-preview video path, no-load invariant, decoded-frame renderability marker, peer video diagnostics, and non-dimension-only renderability classification.
+- [ ] Next validation item: on real Safari/iPhone, confirm `__explorerViewerPeerDebug.topPreviewUsesVideo=true`, `peerVideoMounted=true`, non-zero peer video layout dimensions, `decodedFramesRenderable=true`, and `mediaFailureClass=frames_rendering`.
+
+## 2026-05-07 — WebRTC live preview RTP delivery before recording work (new)
+- [x] Added explicit publisher sendonly video/audio transceivers before offer creation and replaced tracks through transceiver senders instead of falling back to generic `addTrack(...)`.
+- [x] Added explicit Explorer viewer recvonly video/audio transceivers before applying the device offer so answer negotiation has stable receive m-lines.
+- [x] Added SDP/transceiver/sender/receiver diagnostics for offer/answer directions, track ids, current directions, and RTP counters in publisher/viewer debug objects.
+- [x] Disabled recording controls until live video rendering is proven; recording implementation remains intentionally untouched.
+- [ ] Next validation item: confirm Explorer viewer reports inboundVideoBytesReceived > 0, inboundVideoFramesDecoded > 0, and mediaFailureClass=frames_rendering before enabling any device-owned recording command lane work.
+
+## 2026-05-06 — WebRTC ICE candidate ordering and role-correct application (new)
+- [x] Added shared ICE helpers for candidate keys, candidate type extraction, safe `addIceCandidate(...)`, and selected candidate-pair stats summarization.
+- [x] Explorer viewer now queues device ICE until the remote offer is applied, dedupes by candidate key, flushes after `setRemoteDescription(offer)`, and keeps polling/applying device ICE without failing just because playback has not rendered.
+- [x] Connect Device publisher now queues viewer ICE until the remote answer is applied, dedupes by candidate key, flushes after `setRemoteDescription(answer)`, and keeps polling after answer application until connected/failed/stopped.
+- [x] Added viewer/publisher ICE debug counters for received/applied/queued/error candidates plus selected candidate pair and local/remote candidate types.
+- [ ] Next validation item: inspect `__explorerViewerPeerDebug.deviceIceReceivedCount/deviceIceAppliedCount` and `__connectDevicePublisherPeerDebug.viewerIceReceivedCount/viewerIceAppliedCount`; both applied counts must be greater than zero before investigating TURN/STUN/network policy.
+
+## 2026-05-06 — Safari WebRTC playback boundary and RTP diagnostics (new)
+- [x] Added Explorer viewer inbound RTP stats in `window.__explorerViewerPeerDebug` so real Safari runs can distinguish attached tracks with no RTP from RTP with no decoded/rendered frames.
+- [x] Added Connect Device publisher outbound RTP stats in `window.__connectDevicePublisherPeerDebug` with publisher media classification for no outbound RTP, flowing RTP, and non-live local camera tracks.
+- [x] Made Safari/iOS `AbortError` playback rejection retryable: signaling stays `answer_confirmed`, media stays `track_attached`, ICE stays connected, the remote stream remains attached, and the UI prompts `Tap to play live stream`.
+- [x] Stabilized remote `MediaStream` attachment with Safari-safe muted/autoplay/playsinline attributes, stream-id reuse checks before `srcObject` reassignment, no MediaStream `load()`, and `lastSrcObjectAssignedAt` diagnostics.
+- [ ] Next validation item: inspect `__explorerViewerPeerDebug` and `__connectDevicePublisherPeerDebug` to classify `track_attached_but_no_rtp`, `rtp_receiving_but_no_frames_decoded`, `frames_decoded_but_video_play_rejected`, `video_play_interrupted_by_srcobject_reset`, or `frames_rendering`.
+
+## 2026-05-06 — WebRTC media-plane boundary hardening after answer confirmation (new)
+- [x] Split Explorer viewer peer truth into signaling/media/playback/ICE lanes so answer confirmation no longer collapses later media failures into a generic publisher-failed label.
+- [x] Hardened remote track attachment with stream-id/live-track diagnostics, Safari-safe video attributes, exact play rejection name/message telemetry, and a tap-to-play retry path that keeps the stream attached after playback rejection.
+- [x] Added media-plane failure markers (`remote_track_not_emitted`, `video_src_object_not_set`, `video_has_no_live_tracks`, `video_ready_state_zero`, `video_playback_failed`, `peer_ice_failed_before_track`, `ice_exchange_failed`) to Explorer viewer diagnostics.
+- [x] Hardened Connect Device publisher debug with `peerClosedBy` and answer-applied reuse so an answered publisher peer is not closed/recreated by a republish path unless the user explicitly stops or starts a new session.
+- [ ] Validate on real iPhone Safari whether the next failure lands in ICE (`peer_ice_failed_before_track`/`ice_exchange_failed`) or playback (`video_playback_failed` with rejection name/message).
+
+## 2026-05-05 — Canonical live-session authority + peer actor stability patch (new)
+- [x] Added centralized `selectPrimaryLiveSessionForNodeSource` / `selectPrimaryLiveSessionsByNodeSource` contracts that reject runtime viewer events, ended/failed/superseded/stale sessions, and preserve older offered sessions over newer no-offer shells.
+- [x] Routed Explorer live panel, live merge diagnostics, WebRTC/live hooks, and Live Device Instances through the canonical selector so node_id/source_kind surfaces share the same selected session id.
+- [x] Stabilized `LiveSourceCard` viewer actors around `session_id::viewer_id::reconnectGeneration`, sticky offer-seen state, callback refs, and non-regressing answer-confirmed labels/debug.
+- [x] Stabilized Connect Device publisher debug/republish behavior around a session-owned publisher actor and reused the current active session for explicit republish instead of silently creating a replacement no-offer shell.
+- [x] Hardened backend live-session heartbeat so superseded/ended sessions cannot be resurrected as active candidates.
+- [ ] Validate on real iPhone that one node_id/source_kind keeps exactly one primary LIVE card through answer_confirmed -> track_attached -> playing and that Republish does not create a blank no-offer replacement card.
+
+## 2026-05-05 — Stabilize live WebRTC publisher/viewer peer lifecycle (new)
+- [x] Hardened Connect Device publisher peer ownership so one session-owned RTCPeerConnection publishes offer, polls `/signal`, applies viewer answers, consumes viewer ICE once, and only marks connected from peer/ICE connection state.
+- [x] Added `window.__connectDevicePublisherPeerDebug` with stream, track, offer, answer, ICE, state, polling-loop, active-peer, and failure diagnostics.
+- [x] Hardened Explorer viewer peer ownership so answer publication, answer confirmation, device ICE, remote tracks, video metadata/canplay/playing, and concrete failure reasons are tracked separately.
+- [x] Added `window.__explorerViewerPeerDebug` and status lanes that keep signaling (`answer_confirmed`) separate from media (`track_attached`/`playing`).
+- [x] Backend now supersedes older active sessions for the same `node_id` + `source_kind` when a new live session starts, preserving old sessions as ended diagnostics/history.
+- [x] Added static peer-lifecycle contracts plus backend supersession coverage.
+- [ ] Next: complete media-plane attach so one active iPhone Capture Node session reaches:
+  - device publisher: answer_applied -> connected
+  - Explorer viewer: answer_confirmed -> track_attached -> playing
+  - primary LIVE panel: one card for node_id/source_kind
+  - no black preview when peer state says connected
+  - old sessions only visible in diagnostics/history, not primary LIVE cards
+
+## 2026-05-05 — Separate live sessions from viewer runtime events (new)
+- [x] Added strict Explorer live-session guards so `viewer_answer`, `viewer_state`, ICE, and other runtime event payloads cannot be accepted as durable `LiveSessionRecord` data.
+- [x] Changed the Explorer live panel to render only canonical durable `/api/live_sessions` records, with runtime viewer events stored as per-session diagnostics/activity only.
+- [x] Added `window.__explorerLiveMergeDebug` diagnostics for canonical/rendered/runtime-event session ids, rejected event payloads, preferred node/source sessions, and viewer state by session/viewer.
+- [x] Updated live-session details to use the canonical durable session payload and show runtime activity separately instead of replacing details with latest viewer events.
+- [x] Added static Explorer contracts locking runtime-event rejection, dedupe/preference behavior, diagnostics, and canonical details ownership.
+- [ ] Validate real iPhone flow: one current Capture Node live card remains while viewer disconnected/reconnect events appear only in runtime activity diagnostics.
+
+## 2026-05-05 — Explorer live panel rendering and previewability fix (new)
+- [x] Restored Explorer live panel rendering from the merged durable `/api/live_sessions` + WebRTC signal-session lanes so active offer sessions render even when durable preview chunks are absent.
+- [x] Changed live panel/card previewability indicators to use session/offer/answer/viewer signal availability instead of `latest_chunk_path` or `/preview/latest` success.
+- [x] Added `window.__explorerLivePanelDebug` diagnostics for rendered session ids, hidden reason, selected peer session, preview chunk status, and WebRTC preview availability.
+- [x] Added Explorer static contracts locking live-panel rendering against `latest_chunk_path: null` and preview-204 regressions.
+- [ ] Validate real iPhone flow: Start Live Broadcast creates a rendered Live card with `offer:yes` and Watch Live available before any recording chunk exists.
+
+## 2026-05-05 — Durable live-session registry and device-auth lane fix (new)
+- [x] Restored device-lane auth headers for live offer, device ICE, heartbeat, chunk upload, and end-session calls so active sessions are not pruned after unauthorized heartbeats.
+- [x] Added live-session owner debug headers (`X-Live-Session-Registry-Id`, service id, service-registry id) across start/read/signal/heartbeat routes for registry identity proof.
+- [x] Added backend continuity coverage proving start, read, signal offer/answer/ICE, heartbeat, and post-heartbeat read all use the same live-session registry and do not 404 a new session.
+- [x] Added Explorer stale-session drop handling so 404 signal/answer/ICE responses close the peer, clear polling, remove the session locally, and refresh live lanes.
+- [ ] Validate real iPhone flow: after `peer:api-live-confirmed`, `/api/live_sessions/{session_id}` and `/signal` remain 200 with matching registry debug headers.
+
+## 2026-05-05 — Device live-session start POST regression fix (new)
+- [x] Restored `startLiveSession(...)` to include node bearer headers on `POST /api/live_sessions/start` and added start-method/url/status diagnostics.
+- [x] Guarded `getLiveSession('start')` with `invalid_get_live_session_start` diagnostics so the start sentinel cannot be fetched as a durable session id.
+- [x] Threaded Connect Device broadcast diagnostics for `cameraStreamResolved`, `startLiveSessionSessionId`, `broadcastStatus`, and live video track counts.
+- [x] Added Explorer static contracts preventing GET `/api/live_sessions/start`, `getLiveSession('start')`, and missing device auth on start.
+- [ ] Validate real iPhone flow: `/api/live_sessions/start` is POST 200/JSON, Explorer summary returns to 1 live WebRTC session, and Watch Live appears after offer publication.
+
+## 2026-05-05 — Viewer lane + device stream ownership closure (new)
+- [x] Locked Explorer Watch Live to GET `/signal`, POST `/signal/answer`, POST viewer `/signal/ice`, and added static contracts preventing GET `/signal/answer` or viewer heartbeat leakage.
+- [x] Added `window.__explorerLiveFlowDebug` viewer attach diagnostics for clicked session, offer/answer state, viewer ID, track counts, video playback, and precise failure reasons.
+- [x] Made Connect Device broadcast stream resolution idempotent across camera state and `videoRef.current.srcObject`, with live-track validation before publishing offers.
+- [x] Replaced `camera_stream_not_ready` throw with controlled broadcast failure state and `window.__connectDeviceBroadcastDebug` stream ownership diagnostics.
+- [ ] Validate real iPhone flow: Start Live Broadcast never opens Next.js runtime overlay, and Explorer Watch Live flips answer yes with either `playing` or concrete failureReason.
+
+## 2026-05-05 — Watch Live end-to-end activation hardening (new)
+- [x] Changed `openLivePeerViewer` to hydrate the durable `/api/live_sessions/{id}` record immediately and then reload both durable + WebRTC lanes so Watch Live always has an active `LiveSourceCard` mount target.
+- [x] Upgraded `LiveSourceCard` viewer peer lifecycle states to explicit lane markers (`waiting_for_offer`, `answering`, `answered`, `connected`, `playing`, `failed`) with inline diagnostics.
+- [x] Added immediate signal poll on peer enable and explicit answer-post confirmation marker so answer publishing is not delayed to a later interval tick.
+- [x] Stopped `/preview/latest` polling for non-recording/no-chunk sessions to eliminate repeated 404 preview spam while waiting for viewer attach.
+- [ ] Validate on iPhone Safari: Watch Live must flip `answer:no -> answer:yes` for the same session and show either `playing` or a concrete `diag:` reason.
+
+## 2026-05-05 — Explorer live viewer answer auth hardening (new)
+- [x] Removed node-auth header injection from Explorer viewer answer publication (`publishLiveSignalAnswer`) so browser viewers can post answers without stale/invalid node bearer collisions.
+- [x] Limited viewer ICE publish headers to unauthenticated viewer lane (`role: viewer`), keeping node-auth enforcement only for device ICE lane.
+- [x] Updated `LiveSourceCard` viewer signaling calls to use the viewer lane signatures (no device node-id auth coupling).
+- [ ] Validate on-device that `Watch Live` flips session signal from `answer:no` to `answer:yes` for the same `session_id` without 401s on answer/ICE publish.
+
 ## 2026-05-03 — Stabilize Explorer and Connect Device tab ownership
 - [x] Changed stable semantic window names to colon-namespaced format: `thatdamtoolbox:explorer` and `thatdamtoolbox:connect-device`.
 - [x] Introduced typed `BrowserRuntimeUiMessage` discriminated union replacing untyped `Record<string, unknown>` channel messages.

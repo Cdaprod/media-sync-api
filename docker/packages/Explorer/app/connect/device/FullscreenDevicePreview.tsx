@@ -6,7 +6,6 @@ import { useState, useRef, useEffect, useCallback, RefObject } from 'react';
 import { OverlayState } from './deviceMonitorTypes';
 import type { CameraSessionState } from './cameraSession';
 import {
-  useLocalCameras,
   useRemoteCameras,
   useWebGLFx,
   useHistogram,
@@ -27,7 +26,7 @@ interface FullscreenDevicePreviewProps {
   chunkCount?: number;
   sourceKind?: string | null;
   error?: string | null;
-  peerStatus: 'idle' | 'offer-published' | 'connected' | 'failed';
+  peerStatus: string;
   mode: 'local' | 'remote';
   onModeChange: (mode: 'local' | 'remote') => void;
   videoRef: RefObject<HTMLVideoElement>;
@@ -44,11 +43,16 @@ interface FullscreenDevicePreviewProps {
   onClearCameraError?: () => void;
   onRequestOpenPicker?: () => void;
   onRequestToggleScopes?: () => void;
-  onEnableCamera: (options?: { deviceId?: string; facingMode?: 'user' | 'environment' }) => void | Promise<void>;
+  onEnableCamera: (options?: {
+    deviceId?: string;
+    facingMode?: 'user' | 'environment';
+  }) => void | Promise<void>;
   onStartBroadcast: () => void | Promise<void>;
   onUseSelectedLocalDevice: () => Promise<boolean>;
   debugEvents?: string[];
   broadcastLabel?: string;
+  broadcastStage?: string;
+  activeBroadcastSessionId?: string | null;
   onStartScreen: () => void | Promise<void>;
   onStopPreview: () => void | Promise<void>;
   onStartDeviceRecording: () => void | Promise<void>;
@@ -86,6 +90,8 @@ export default function FullscreenDevicePreview({
   onUseSelectedLocalDevice,
   debugEvents = [],
   broadcastLabel,
+  broadcastStage,
+  activeBroadcastSessionId,
   onStartScreen,
   onStopPreview,
   onStartDeviceRecording,
@@ -107,16 +113,22 @@ export default function FullscreenDevicePreview({
   const [mounted, setMounted] = useState(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const { devices: hookLocalDevices, permission: localPermission, refresh: refreshLocal } = useLocalCameras();
-  const localDevices = cameraState?.devices ?? hookLocalDevices;
-  const safeLocalDevices = Array.isArray(localDevices) ? localDevices : [];
-  const { nodes: remoteNodes, refresh: refreshRemote } = useRemoteCameras({ mode, remotePickerOpen: pickerOpen && mode === 'remote' });
+  const safeLocalDevices = Array.isArray(cameraState?.devices) ? cameraState.devices : [];
+  const localPermission = cameraState?.permission === 'unknown' ? 'prompt' : (cameraState?.permission ?? 'prompt');
+  const refreshLocal = onRefreshDevices ?? (async () => undefined);
+  const { nodes: remoteNodes, refresh: refreshRemote } = useRemoteCameras({
+    mode,
+    remotePickerOpen: pickerOpen && mode === 'remote',
+  });
 
   // Poll videoRef.srcObject for audio analyser (fix 2)
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   useEffect(() => {
     const timer = window.setInterval(() => {
-      const next = videoRef.current?.srcObject instanceof MediaStream ? videoRef.current.srcObject : null;
+      const next =
+        videoRef.current?.srcObject instanceof MediaStream
+          ? videoRef.current.srcObject
+          : null;
       setMediaStream((prev) => (prev === next ? prev : next));
     }, 500);
     return () => window.clearInterval(timer);
@@ -124,9 +136,12 @@ export default function FullscreenDevicePreview({
   useEffect(() => {
     setMounted(true);
   }, []);
-  useEffect(() => () => {
-    clearTimeout(idleTimerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      clearTimeout(idleTimerRef.current);
+    },
+    [],
+  );
 
   const { analyser, peakLevel } = useAudioAnalyser(mediaStream);
 
@@ -193,32 +208,60 @@ export default function FullscreenDevicePreview({
     window.addEventListener('explorer-monitor-toggle-scopes', toggleScopes);
     return () => {
       window.removeEventListener('explorer-monitor-open-picker', openPicker);
-      window.removeEventListener('explorer-monitor-toggle-scopes', toggleScopes);
+      window.removeEventListener(
+        'explorer-monitor-toggle-scopes',
+        toggleScopes,
+      );
     };
   }, []);
 
   const isActive = state === 'previewing' || state === 'recording';
   const isDeviceRecording = state === 'recording';
-  const isBusy = cameraState?.status === 'starting' || state === 'requesting-permission';
+  const isBusy =
+    cameraState?.status === 'starting' || state === 'requesting-permission';
   const isError = state === 'error';
   const isEnded = state === 'ended';
   const isIdle = state === 'idle' || state === 'ended' || state === 'error';
   const showResume = isError || isEnded;
+
+  const hasLiveVideoStream = () => {
+    if (typeof MediaStream === 'undefined') return false;
+    const stream = videoRef.current?.srcObject;
+    return (
+      stream instanceof MediaStream &&
+      stream.getVideoTracks().some((track) => track.readyState === 'live')
+    );
+  };
+  const hasCameraReady =
+    (typeof MediaStream !== 'undefined' &&
+      cameraState?.stream instanceof MediaStream &&
+      cameraState.stream
+        .getVideoTracks()
+        .some((track) => track.readyState === 'live')) ||
+    hasLiveVideoStream();
+  const hasMonitorStream = hasCameraReady || hasLiveVideoStream();
+  const shouldShowMonitorControls = overlaysVisible && hasMonitorStream;
+  const hasBroadcastSession = Boolean(activeBroadcastSessionId || sessionId);
+  const stopBroadcastStages = new Set([
+    'waiting_for_answer',
+    'connected',
+    'broadcasting',
+    'camera_ready',
+    'failed',
+  ]);
+  const shouldShowStopBroadcast =
+    hasBroadcastSession && stopBroadcastStages.has(broadcastStage || '');
 
   const selectedDeviceLabel = (() => {
     if (sourceKind === 'screen') return 'Screen share';
     return sourceKind === 'camera' ? 'Camera feed' : 'No camera selected';
   })();
 
-  const hasLiveVideoStream = () => {
-    const stream = videoRef.current?.srcObject;
-    return stream instanceof MediaStream && stream.getVideoTracks().some((track) => track.readyState === 'live');
-  };
-  const hasCameraReady = !!cameraState?.stream || hasLiveVideoStream();
   const cameraStatus = cameraState?.status || 'idle';
   useEffect(() => {
     setControlsOpen((current) => {
-      const shouldControlsBeOpen = mode === 'remote' || (mode === 'local' && !hasCameraReady);
+      const shouldControlsBeOpen =
+        mode === 'remote' || (mode === 'local' && !hasCameraReady);
       return current === shouldControlsBeOpen ? current : shouldControlsBeOpen;
     });
   }, [mode, hasCameraReady, cameraStatus]);
@@ -231,128 +274,267 @@ export default function FullscreenDevicePreview({
   };
 
   useEffect(() => {
-    if (selectedDeviceId && !safeLocalDevices.some((device) => device.deviceId === selectedDeviceId)) {
+    if (
+      selectedDeviceId &&
+      !safeLocalDevices.some((device) => device.deviceId === selectedDeviceId)
+    ) {
       onSelectDevice(null);
     }
   }, [onSelectDevice, safeLocalDevices, selectedDeviceId]);
 
   return (
-    <div id="fullscreen-root" className={`fullscreen-container device-monitor-content ${pickerOpen ? 'picker-open' : ''} ${modalOpen ? 'error-modal-open' : ''}`}>
-      <video ref={videoRef} id="video-bg" autoPlay playsInline muted disablePictureInPicture />
+    <div
+      id="fullscreen-root"
+      className={`fullscreen-container device-monitor-content ${pickerOpen ? 'picker-open' : ''} ${modalOpen ? 'error-modal-open' : ''}`}
+    >
+      <video
+        ref={videoRef}
+        id="video-bg"
+        autoPlay
+        playsInline
+        muted
+        disablePictureInPicture
+      />
       <canvas ref={fxCanvasRef} id="fx-canvas" />
-      <canvas ref={hudHistCanvasRef} id="hud-histogram-canvas" className={`scope-hud-canvas ${overlays.scopeHud ? '' : 'hidden'}`} width="260" height="70" />
-      <canvas ref={hudVecCanvasRef} id="hud-vectorscope-canvas" className={`scope-hud-canvas ${overlays.scopeHud ? '' : 'hidden'}`} width="120" height="120" />
-      <canvas ref={hudWaveCanvasRef} id="hud-waveform-canvas" className={`scope-hud-canvas ${overlays.scopeHud ? '' : 'hidden'}`} width="260" height="48" />
+      <canvas
+        ref={hudHistCanvasRef}
+        id="hud-histogram-canvas"
+        className={`scope-hud-canvas ${overlays.scopeHud ? '' : 'hidden'}`}
+        width="260"
+        height="70"
+      />
+      <canvas
+        ref={hudVecCanvasRef}
+        id="hud-vectorscope-canvas"
+        className={`scope-hud-canvas ${overlays.scopeHud ? '' : 'hidden'}`}
+        width="120"
+        height="120"
+      />
+      <canvas
+        ref={hudWaveCanvasRef}
+        id="hud-waveform-canvas"
+        className={`scope-hud-canvas ${overlays.scopeHud ? '' : 'hidden'}`}
+        width="260"
+        height="48"
+      />
       <div className="gradient-vignette" />
 
       {/* Overlay layer for idle/busy/error/ended */}
-      {overlayVisible && (isIdle || isBusy || showFatalError || hasCameraReady) && (
-        <div className="overlay-layer">
-          <div className={`overlay-card ${showFatalError ? 'error-card' : ''}`}>
-            <h2>
-              {showFatalError ? 'Camera unavailable' : isEnded ? 'Session ended' : isBusy ? 'Starting...' : hasCameraReady ? 'Camera ready' : 'Camera source'}
-            </h2>
-            <p>
-              {showFatalError ? (cameraErrorMessage || error || 'Unknown error') : isEnded ? 'The broadcast has finished.' : isBusy ? 'Requesting permissions and establishing connection...' : hasCameraReady ? 'Local preview is active. You can start live broadcast.' : 'Enable this device camera first. Broadcast is optional.'}
-            </p>
-            <div className="btn-stack">
-              {mode === 'local' && hasCameraReady ? (
-                <button className="btn-overlay ghost" onClick={() => setControlsOpen(false)}>
-                  Hide Controls
+      {overlayVisible &&
+        (isIdle || isBusy || showFatalError || hasCameraReady) && (
+          <div className="overlay-layer">
+            <div
+              className={`overlay-card ${showFatalError ? 'error-card' : ''}`}
+            >
+              <h2>
+                {showFatalError
+                  ? 'Camera unavailable'
+                  : isEnded
+                    ? 'Session ended'
+                    : isBusy
+                      ? 'Starting...'
+                      : hasCameraReady
+                        ? 'Camera ready'
+                        : 'Camera source'}
+              </h2>
+              <p>
+                {showFatalError
+                  ? cameraErrorMessage || error || 'Unknown error'
+                  : isEnded
+                    ? 'The broadcast has finished.'
+                    : isBusy
+                      ? 'Requesting permissions and establishing connection...'
+                      : hasCameraReady
+                        ? 'Local preview is active. You can start live broadcast.'
+                        : 'Enable this device camera first. Broadcast is optional.'}
+              </p>
+              <div className="btn-stack">
+                {mode === 'local' && hasCameraReady ? (
+                  <button
+                    className="btn-overlay ghost"
+                    onClick={() => setControlsOpen(false)}
+                  >
+                    Hide Controls
+                  </button>
+                ) : null}
+                {isIdle && !isError && !isEnded && (
+                  <>
+                    <button
+                      className="btn-overlay ghost"
+                      onClick={() => {
+                        void onEnableCamera();
+                      }}
+                      disabled={!mounted ? false : !canUseCamera}
+                    >
+                      Enable Camera
+                    </button>
+                    {mode === 'remote' ? (
+                      <button
+                        className="btn-overlay ghost"
+                        onClick={() => {
+                          void onStartBroadcast();
+                        }}
+                        disabled={isBusy || !hasCameraReady}
+                      >
+                        Start Live Broadcast
+                      </button>
+                    ) : null}
+                    {canUseScreen && !isLikelyIOS && (
+                      <button
+                        className="btn-overlay ghost"
+                        onClick={onStartScreen}
+                      >
+                        Share Screen
+                      </button>
+                    )}
+                    <button
+                      className="btn-overlay ghost"
+                      onClick={() => setPickerOpen(true)}
+                    >
+                      Pick Camera
+                    </button>
+                  </>
+                )}
+                {(showFatalError || isEnded) && (
+                  <>
+                    <button
+                      className="btn-overlay primary"
+                      onClick={() => {
+                        void onStartBroadcast();
+                      }}
+                    >
+                      Retry
+                    </button>
+                    <button
+                      className="btn-overlay ghost"
+                      onClick={() => setPickerOpen(true)}
+                    >
+                      Pick Camera
+                    </button>
+                  </>
+                )}
+                <button
+                  className="btn-overlay ghost"
+                  onClick={onBackToExplorer}
+                >
+                  Back to Explorer
                 </button>
-              ) : null}
-              {isIdle && !isError && !isEnded && (
-                <>
-                  <button className="btn-overlay ghost" onClick={() => { void onEnableCamera(); }} disabled={!mounted ? false : !canUseCamera}>
-                    Enable Camera
-                  </button>
-                  {mode === 'remote' ? (
-                    <button className="btn-overlay ghost" onClick={() => { void onStartBroadcast(); }} disabled={isBusy || !hasCameraReady}>
-                      Start Live Broadcast
-                    </button>
-                  ) : null}
-                  {canUseScreen && !isLikelyIOS && (
-                    <button className="btn-overlay ghost" onClick={onStartScreen}>
-                      Share Screen
-                    </button>
-                  )}
-                  <button className="btn-overlay ghost" onClick={() => setPickerOpen(true)}>
-                    Pick Camera
-                  </button>
-                </>
-              )}
-              {(showFatalError || isEnded) && (
-                <>
-                  <button className="btn-overlay primary" onClick={() => { void onStartBroadcast(); }}>
-                    Retry
-                  </button>
-                  <button className="btn-overlay ghost" onClick={() => setPickerOpen(true)}>
-                    Pick Camera
-                  </button>
-                </>
-              )}
-              <button className="btn-overlay ghost" onClick={onBackToExplorer}>
-                Back to Explorer
-              </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
       {mode === 'local' && hasCameraReady && !controlsOpen ? (
-        <button className="btn-pill" style={{ position: 'absolute', top: 88, right: 16, zIndex: 20 }} onClick={() => setControlsOpen(true)}>
+        <button
+          className="btn-pill"
+          style={{ position: 'absolute', top: 88, right: 16, zIndex: 20 }}
+          onClick={() => setControlsOpen(true)}
+        >
           Controls
         </button>
       ) : null}
 
       {/* Top cluster (active only) */}
-      <div className={`top-cluster ${overlaysVisible && isActive ? 'visible' : 'hidden'}`}>
+      <div
+        className={`top-cluster ${shouldShowMonitorControls ? 'visible' : 'hidden'}`}
+      >
         <div className="top-inner">
           <div className="top-meta">
             <p className="facing">Camera</p>
             <p className="cam-label">{selectedDeviceLabel}</p>
             <p className="perm-label">Permission: {localPermission}</p>
             {error && <p className="err-label">{error}</p>}
-            {peerStatus !== 'idle' && <p className="perm-label">WebRTC: {peerStatus}</p>}
-            {state === 'starting' && <p className="perm-label">Starting camera…</p>}
-            {peerStatus === 'idle' && state === 'previewing' && <p className="perm-label">Publishing live offer…</p>}
-            {peerStatus === 'offer-published' && <p className="perm-label">Waiting for Explorer answer…</p>}
-            {sessionId && <p className="perm-label">Session: {sessionId.slice(0,8)}…</p>}
+            {peerStatus !== 'idle' && (
+              <p className="perm-label">WebRTC: {peerStatus}</p>
+            )}
+            {state === 'starting' && (
+              <p className="perm-label">Starting camera…</p>
+            )}
+            {peerStatus === 'idle' && state === 'previewing' && (
+              <p className="perm-label">Publishing live offer…</p>
+            )}
+            {peerStatus === 'offer-published' && (
+              <p className="perm-label">Waiting for Explorer answer…</p>
+            )}
+            {sessionId && (
+              <p className="perm-label">Session: {sessionId.slice(0, 8)}…</p>
+            )}
           </div>
           <div className="top-actions">
-            <button className="btn-pill" onClick={() => setModalOpen(true)}>Camera Info</button>
-            <button className="btn-pill" onClick={() => setShelfOpen(true)}>Scopes · Overlays · Controls</button>
-            {showResume && <button className="btn-pill" onClick={onEnableCamera}>Resume</button>}
-            <button className="btn-pill" onClick={onBackToExplorer}>Explorer</button>
+            <button className="btn-pill" onClick={() => setModalOpen(true)}>
+              Camera Info
+            </button>
+            <button className="btn-pill" onClick={() => setShelfOpen(true)}>
+              Scopes · Overlays · Controls
+            </button>
+            {showResume && (
+              <button className="btn-pill" onClick={onEnableCamera}>
+                Resume
+              </button>
+            )}
+            <button className="btn-pill" onClick={onBackToExplorer}>
+              Explorer
+            </button>
           </div>
         </div>
       </div>
       {process.env.NODE_ENV !== 'production' ? (
         <div className="picker-status-chip">
-          Camera: {cameraState?.status || 'unknown'} · Selected: {cameraState?.selectedDeviceId || 'default'} · Session: {sessionId || 'none'} · Peer: {peerStatus}
+          Camera: {cameraState?.status || 'unknown'} · Selected:{' '}
+          {cameraState?.selectedDeviceId || 'default'} · Session:{' '}
+          {sessionId || 'none'} · Peer: {peerStatus}
           {broadcastLabel ? ` · ${broadcastLabel}` : ''}
           {debugEvents.length > 0 ? ` · ${debugEvents.join(' | ')}` : ''}
         </div>
       ) : null}
 
       {/* Bottom bar (active only) */}
-      <div className={`bottom-bar ${overlaysVisible && isActive ? 'visible' : 'hidden'}`}>
+      <div
+        className={`bottom-bar ${shouldShowMonitorControls ? 'visible' : 'hidden'}`}
+      >
         <div className="bottom-inner">
           <div className="bottom-main-row">
             {isDeviceRecording ? (
-              <button className="btn-record recording" onClick={onStopDeviceRecording}>
+              <button
+                className="btn-record recording"
+                onClick={onStopDeviceRecording}
+              >
                 🔴 Stop · {chunkCount} chunks
               </button>
             ) : (
-              <button className="btn-record idle" onClick={onStartDeviceRecording}>Device Rec</button>
+              <button
+                className="btn-record idle"
+                onClick={onStartDeviceRecording}
+              >
+                Device Rec
+              </button>
             )}
-            <button className="btn-action" onClick={onStopPreview}>Stop Broadcast</button>
-            <button className="btn-action subtle" onClick={toggleAppFullscreen}>⛶</button>
-            <button className="btn-action" onClick={onBackToExplorer}>Explorer</button>
+            {shouldShowStopBroadcast ? (
+              <button className="btn-action" onClick={onStopPreview}>
+                Stop Broadcast
+              </button>
+            ) : (
+              <button
+                className="btn-action"
+                onClick={() => {
+                  void onStartBroadcast();
+                }}
+              >
+                Start Broadcast
+              </button>
+            )}
+            <button className="btn-action subtle" onClick={toggleAppFullscreen}>
+              ⛶
+            </button>
+            <button className="btn-action" onClick={onBackToExplorer}>
+              Explorer
+            </button>
           </div>
           <div className="bottom-sub-row">
             <span>Remote inventory</span>
             <div className="sub-btns">
-              <button className="btn-pill" onClick={() => setPickerOpen(true)}>Switch</button>
+              <button className="btn-pill" onClick={() => setPickerOpen(true)}>
+                Switch
+              </button>
             </div>
           </div>
         </div>
@@ -362,7 +544,9 @@ export default function FullscreenDevicePreview({
         isOpen={shelfOpen}
         onClose={() => setShelfOpen(false)}
         overlays={overlays}
-        onToggleOverlay={(key) => setOverlays(prev => ({ ...prev, [key]: !prev[key] }))}
+        onToggleOverlay={(key) =>
+          setOverlays((prev) => ({ ...prev, [key]: !prev[key] }))
+        }
         histogramCanvasRef={histCanvasRef}
         vectorscopeCanvasRef={vecCanvasRef}
         waveformCanvasRef={waveCanvasRef}
@@ -371,7 +555,9 @@ export default function FullscreenDevicePreview({
         peakLevel={peakLevel}
       />
 
-      {cameraWarning ? <div className="picker-status-chip">{cameraWarning}</div> : null}
+      {cameraWarning ? (
+        <div className="picker-status-chip">{cameraWarning}</div>
+      ) : null}
       <DevicePickerSheet
         isOpen={pickerOpen}
         onClose={() => setPickerOpen(false)}
@@ -388,7 +574,7 @@ export default function FullscreenDevicePreview({
         onModeChange={onModeChange}
         onOpenRemoteNode={(nodeId) => openDeviceTab(nodeId)}
         onRefresh={async () => {
-          await (onRefreshDevices ? onRefreshDevices() : refreshLocal());
+          await refreshLocal();
           refreshRemote();
         }}
       />

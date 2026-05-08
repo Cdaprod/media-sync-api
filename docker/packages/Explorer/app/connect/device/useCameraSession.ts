@@ -5,6 +5,7 @@ import type { RefObject } from 'react';
 import { CameraSessionState, StartCameraOptions, describeCameraError, inferFacingModeFromLabel, normalizeCameraError, sanitizeCameraDevice } from './cameraSession';
 
 export function useCameraSession(options?: { videoRef?: RefObject<HTMLVideoElement> }) {
+  // Canonical local camera authority: stream, permission, device inventory, selection, and getUserMedia lifecycle live here.
   const traceCamera = useCallback((event: string, details?: Record<string, unknown>) => {
     if (process.env.NODE_ENV !== 'production') {
       console.info(`[camera-session] ${event}`, details || {});

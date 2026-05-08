@@ -23,7 +23,7 @@ import type {
   LiveSignalState,
   LiveSourceKind,
 } from './types/liveSession';
-import { buildNodeAuthHeaders, getBrowserRuntimeIdentityDiagnostics, getNodeAuthHeaders, getStoredNodeToken, requireNodeAuthHeaders, resolveBrowserRuntimeAuth } from './lib/browserRuntimeIdentity';
+import { buildNodeAuthHeaders, requireNodeAuthHeaders, resolveBrowserRuntimeAuth } from './lib/browserRuntimeIdentity';
 
 export interface ResolveRequest {
   project: string;
@@ -36,6 +36,16 @@ export type {
   RecordingSession,
   RecordingSessionState,
 };
+
+function markConnectDeviceBroadcastDebug(patch: Record<string, unknown>) {
+  if (typeof window === 'undefined') return;
+  const current = ((window as any).__connectDeviceBroadcastDebug || {}) as Record<string, unknown>;
+  (window as any).__connectDeviceBroadcastDebug = {
+    ...current,
+    ...patch,
+    lastUpdatedAt: Date.now(),
+  };
+}
 
 export interface AssetRef {
   relative_path: string;
@@ -61,6 +71,7 @@ export type LiveRecordingUploadResult = {
 export type RecordingSessionRecord = RecordingSession;
 
 export interface ApiClient {
+  getJson: (url: string) => Promise<Record<string, unknown>>;
   listSources: () => Promise<SourceControlRecord[]>;
   listNodes: () => Promise<NodeControlRecord[]>;
   heartbeatNode: (node: string | { nodeId: string; token?: string | null }) => Promise<NodeControlRecord>;
@@ -75,7 +86,7 @@ export interface ApiClient {
   acknowledgeLiveSessionControl: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction }>;
   getLiveSignalState: (sessionId: string, viewerId?: string | null) => Promise<LiveSignalState>;
   publishLiveSignalOffer: (sessionId: string, offer: LiveSignalDescription, nodeId?: string) => Promise<LiveSignalState>;
-  publishLiveSignalAnswer: (sessionId: string, viewerId: string, answer: LiveSignalDescription, nodeId?: string) => Promise<LiveSignalState>;
+  publishLiveSignalAnswer: (sessionId: string, viewerId: string, answer: LiveSignalDescription) => Promise<LiveSignalState>;
   publishLiveSignalIce: (sessionId: string, role: LiveSignalRole, viewerId: string, candidate: LiveSignalIceCandidate, nodeId?: string) => Promise<LiveSignalState>;
   sendLiveSessionControl: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction; session_id: string }>;
   uploadLiveSessionRecording: (sessionId: string, payload: {
@@ -98,11 +109,12 @@ export interface ApiClient {
   completeRecordingSession: (recordingId: string, payload: { asset_url?: string | null; filename?: string | null }) => Promise<RecordingSessionRecord>;
   failRecordingSession: (recordingId: string, payload: { error: string }) => Promise<RecordingSessionRecord>;
   deleteRecordingSession: (recordingId: string) => Promise<{ ok: boolean; recording_id: string; deleted: boolean }>;
-  heartbeatLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
-  uploadLiveSessionChunk: (sessionId: string, blob: Blob) => Promise<void>;
-  endLiveSession: (sessionId: string) => Promise<{ session: LiveSessionRecord; claim_id: string | null }>;
+  heartbeatLiveSession: (sessionId: string, nodeId?: string | null) => Promise<LiveSessionRecord>;
+  uploadLiveSessionChunk: (sessionId: string, blob: Blob, nodeId?: string | null) => Promise<void>;
+  endLiveSession: (sessionId: string, nodeId?: string | null) => Promise<{ session: LiveSessionRecord; claim_id: string | null }>;
   listLiveSessions: () => Promise<LiveSessionRecord[]>;
   listWebRtcLiveSessions: () => Promise<WebRtcLiveSession[]>;
+  getLiveOffer: (sessionId: string) => Promise<RTCSessionDescriptionInit | null>;
   postLiveViewerAnswer: (sessionId: string, viewerId: string, answer: RTCSessionDescriptionInit) => Promise<{ ok: boolean; session_id: string; viewer_id: string }>;
   postLiveViewerIce: (sessionId: string, viewerId: string, candidate: RTCIceCandidateInit) => Promise<{ ok: boolean; session_id: string; viewer_id: string }>;
   listLiveDeviceIce: (sessionId: string) => Promise<RTCIceCandidateInit[]>;
@@ -271,62 +283,158 @@ export function createApiClient(baseUrl = ''): ApiClient {
 
       return response.json();
     },
-    async startLiveSession(nodeId: string, sourceKind: LiveSourceKind, metadata: Record<string, unknown> = {}): Promise<LiveSessionRecord> {
-      const authHeaders = requireNodeAuthHeaders(nodeId);
-      const response = await fetch(buildUrl('/api/live_sessions/start'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          ...authHeaders,
-        },
-        cache: 'no-store',
-        body: JSON.stringify({ node_id: nodeId, source_kind: sourceKind, metadata }),
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to start live session: ${response.status}`);
+    async startLiveSession(
+      nodeId: string,
+      sourceKind: LiveSourceKind,
+      metadata: Record<string, unknown> = {},
+    ): Promise<LiveSessionRecord> {
+      const payload = {
+        node_id: nodeId,
+        source_kind: sourceKind,
+        metadata,
+      };
+
+      const liveSessionCreateDiagnostics: {
+        durableLiveSessionCreateRoute: string;
+        durableLiveSessionCreatePayload: typeof payload;
+        durableLiveSessionCreateStatus: number | 'auth_required' | null;
+        durableLiveSessionCreateResponse: unknown;
+        liveSessionCreateAttempted: boolean;
+        liveSessionCreateSucceeded: boolean;
+        liveSessionCreateError: string | null;
+        sessionIdAfterStartPreview: string | null;
+        hasNodeAuthHeaders: boolean;
+        broadcastStartFailureClass?: 'auth_required' | 'auth_failed' | 'live_session_create_failed';
+        lastFailureReason?: string;
+      } = {
+        durableLiveSessionCreatePayload: payload,
+        durableLiveSessionCreateStatus: null,
+        durableLiveSessionCreateResponse: null,
+        liveSessionCreateAttempted: false,
+        liveSessionCreateError: null,
+        sessionIdAfterStartPreview: null,
+        hasNodeAuthHeaders: false,
+      };
+
+      try {
+        const authHeaders = requireNodeAuthHeaders(nodeId);
+
+        liveSessionCreateDiagnostics.hasNodeAuthHeaders = Boolean(
+          authHeaders.Authorization || authHeaders['X-Media-Sync-Node-Id'],
+        );
+        liveSessionCreateDiagnostics.liveSessionCreateAttempted = true;
+        // Keep this diagnostics marker immediately followed by the durable live-session POST.
+        markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
+
+        const response = await fetch(buildUrl('/api/live_sessions/start'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            ...authHeaders,
+          },
+          cache: 'no-store',
+          body: JSON.stringify(payload),
+        });
+
+        const body = await parseJson<LiveSessionRecord & { detail?: string; message?: string }>(response);
+
+        liveSessionCreateDiagnostics.durableLiveSessionCreateStatus = response.status;
+        liveSessionCreateDiagnostics.durableLiveSessionCreateResponse = body;
+
+          const message = String(body?.detail || body?.message || `Failed to start live session: ${response.status}`);
+
+          liveSessionCreateDiagnostics.liveSessionCreateError = message;
+          liveSessionCreateDiagnostics.broadcastStartFailureClass =
+            response.status === 401 || response.status === 403
+              ? 'auth_failed'
+              : 'live_session_create_failed';
+          liveSessionCreateDiagnostics.lastFailureReason = `start_live_session_failed:${response.status}`;
+
+          markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
+          throw new Error(message);
+        }
+
+        if (!body || !body.session_id) {
+          liveSessionCreateDiagnostics.broadcastStartFailureClass = 'live_session_create_failed';
+          liveSessionCreateDiagnostics.lastFailureReason = 'missing_session_id';
+
+          markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
+          throw new Error('Live session start returned no session_id');
+        }
+
+        liveSessionCreateDiagnostics.liveSessionCreateSucceeded = true;
+        liveSessionCreateDiagnostics.sessionIdAfterStartPreview = body.session_id;
+
+        markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
+        return body;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+
+        if (!liveSessionCreateDiagnostics.liveSessionCreateError) {
+          liveSessionCreateDiagnostics.liveSessionCreateError = message;
+        }
+
+        if (!liveSessionCreateDiagnostics.broadcastStartFailureClass) {
+          liveSessionCreateDiagnostics.broadcastStartFailureClass =
+            message === 'missing_device_bearer_token' || message.toLowerCase().includes('bearer')
+              ? 'auth_required'
+              : 'live_session_create_failed';
+        }
+
+        if (liveSessionCreateDiagnostics.durableLiveSessionCreateStatus === null) {
+          liveSessionCreateDiagnostics.durableLiveSessionCreateStatus =
+            liveSessionCreateDiagnostics.broadcastStartFailureClass === 'auth_required'
+              ? 'auth_required'
+              : null;
+        }
+
+        if (!liveSessionCreateDiagnostics.lastFailureReason) {
+          liveSessionCreateDiagnostics.lastFailureReason =
+            liveSessionCreateDiagnostics.broadcastStartFailureClass === 'auth_required'
+              ? 'auth_required'
+              : 'live_session_create_failed';
+        }
+
+        markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
+        throw error;
       }
-      return response.json();
-    },
-    async getLiveSession(sessionId: string): Promise<LiveSessionRecord> {
-      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}`), {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-        cache: 'no-store',
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to get live session: ${response.status}`);
+
+      if (sessionId === 'start') {
+        markConnectDeviceBroadcastDebug({
+          invalidGetLiveSessionStart: true,
+          invalidGetLiveSessionId: sessionId,
+          lastFailureReason: 'invalid_get_live_session_start',
+        });
+        throw new Error('invalid_get_live_session_start');
       }
-      return response.json();
-    },
-    async controlLiveSession(sessionId: string, action: LiveSessionControlAction): Promise<{ ok: boolean; action: LiveSessionControlAction }> {
-      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/control`), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+
+
+      const payload = await parseJson<LiveSessionRecord & { detail?: string; message?: string }>(response);
+
+        throw new Error(String(payload?.detail || payload?.message || `Failed to load live session: ${response.status}`));
+
+      return payload;
+
+    async controlLiveSession(
+      sessionId: string,
+      action: LiveSessionControlAction,
+    ): Promise<{ ok: boolean; action: LiveSessionControlAction }> {
           Accept: 'application/json',
         },
         cache: 'no-store',
         body: JSON.stringify({ action }),
       });
-      if (!response.ok) {
-        throw new Error(`Failed to control live session: ${response.status}`);
-      }
-      return response.json();
-    },
-    async sendLiveSessionControl(sessionId: string, action: LiveSessionControlAction): Promise<{ ok: boolean; action: LiveSessionControlAction; session_id: string }> {
-      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/control`), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        cache: 'no-store',
-        body: JSON.stringify({ action }),
-      });
-      const payload = await parseJson<{ ok: boolean; action: LiveSessionControlAction; session_id: string; detail?: string }>(response);
-      if (!response.ok) {
-        throw new Error(String(payload?.detail || `Failed to send live session control: ${response.status}`));
+
+      const payload = await parseJson<{ ok: boolean; action: LiveSessionControlAction; detail?: string }>(response);
+
+        throw new Error(String(payload?.detail || `Failed to control live session: ${response.status}`));
+
+      return payload;
+    async sendLiveSessionControl(
+      sessionId: string,
+      action: LiveSessionControlAction,
+    ): Promise<{ ok: boolean; action: LiveSessionControlAction; session_id: string }> {
       }
       return payload;
     },
@@ -492,14 +600,12 @@ export function createApiClient(baseUrl = ''): ApiClient {
       }
       return response.json();
     },
-    async publishLiveSignalAnswer(sessionId: string, viewerId: string, answer: LiveSignalDescription, nodeId?: string): Promise<LiveSignalState> {
-      const authHeaders = getNodeAuthHeaders(nodeId);
+    async publishLiveSignalAnswer(sessionId: string, viewerId: string, answer: LiveSignalDescription): Promise<LiveSignalState> {
       const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/signal/answer`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
-          ...authHeaders,
         },
         cache: 'no-store',
         body: JSON.stringify({ viewer_id: viewerId, answer }),
@@ -510,7 +616,7 @@ export function createApiClient(baseUrl = ''): ApiClient {
       return response.json();
     },
     async publishLiveSignalIce(sessionId: string, role: LiveSignalRole, viewerId: string, candidate: LiveSignalIceCandidate, nodeId?: string): Promise<LiveSignalState> {
-      const authHeaders = role === 'device' ? requireNodeAuthHeaders(nodeId) : getNodeAuthHeaders(nodeId);
+      const authHeaders = role === 'device' ? requireNodeAuthHeaders(nodeId) : {};
       const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/signal/ice`), {
         method: 'POST',
         headers: {
@@ -526,10 +632,11 @@ export function createApiClient(baseUrl = ''): ApiClient {
       }
       return response.json();
     },
-    async heartbeatLiveSession(sessionId: string): Promise<LiveSessionRecord> {
+    async heartbeatLiveSession(sessionId: string, nodeId?: string | null): Promise<LiveSessionRecord> {
+      const authHeaders = requireNodeAuthHeaders(nodeId);
       const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/heartbeat`), {
         method: 'POST',
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/json', ...authHeaders },
         cache: 'no-store',
       });
       if (!response.ok) {
@@ -537,12 +644,14 @@ export function createApiClient(baseUrl = ''): ApiClient {
       }
       return response.json();
     },
-    async uploadLiveSessionChunk(sessionId: string, blob: Blob): Promise<void> {
+    async uploadLiveSessionChunk(sessionId: string, blob: Blob, nodeId?: string | null): Promise<void> {
+      const authHeaders = requireNodeAuthHeaders(nodeId);
       const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/chunk`), {
         method: 'POST',
         headers: {
           'Content-Type': blob.type || 'application/octet-stream',
           Accept: 'application/json',
+          ...authHeaders,
         },
         body: blob,
       });
@@ -550,10 +659,11 @@ export function createApiClient(baseUrl = ''): ApiClient {
         throw new Error(`Failed to upload live chunk: ${response.status}`);
       }
     },
-    async endLiveSession(sessionId: string): Promise<{ session: LiveSessionRecord; claim_id: string | null }> {
+    async endLiveSession(sessionId: string, nodeId?: string | null): Promise<{ session: LiveSessionRecord; claim_id: string | null }> {
+      const authHeaders = requireNodeAuthHeaders(nodeId);
       const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/end`), {
         method: 'POST',
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/json', ...authHeaders },
         cache: 'no-store',
       });
       if (!response.ok) {

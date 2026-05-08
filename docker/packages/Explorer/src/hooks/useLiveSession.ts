@@ -19,9 +19,9 @@ interface ApiShape {
   getLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
   controlLiveSession: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction }>;
   acknowledgeLiveSessionControl: (sessionId: string, action: LiveSessionControlAction) => Promise<{ ok: boolean; action: LiveSessionControlAction }>;
-  heartbeatLiveSession: (sessionId: string) => Promise<LiveSessionRecord>;
-  uploadLiveSessionChunk: (sessionId: string, blob: Blob) => Promise<void>;
-  endLiveSession: (sessionId: string) => Promise<{ session: LiveSessionRecord; claim_id: string | null }>;
+  heartbeatLiveSession: (sessionId: string, nodeId?: string | null) => Promise<LiveSessionRecord>;
+  uploadLiveSessionChunk: (sessionId: string, blob: Blob, nodeId?: string | null) => Promise<void>;
+  endLiveSession: (sessionId: string, nodeId?: string | null) => Promise<{ session: LiveSessionRecord; claim_id: string | null }>;
 }
 type PreviewStartOptions = {
   deviceId?: string;
@@ -109,6 +109,8 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
       return `${domErr?.name || 'CameraError'}: ${domErr?.message || 'Unable to start camera preview.'}`;
     };
 
+    let durableLiveSessionCreateAttempted = false;
+
     try {
       traceLive('startPreview:begin', { kind: sourceKind, hasExternalStream: !!options?.stream });
       const old = videoRef.current?.srcObject;
@@ -147,6 +149,7 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
       }
 
       setState('starting');
+      durableLiveSessionCreateAttempted = true;
       const nextSession = await api.startLiveSession(nodeId, sourceKind, {
         origin: 'browser',
       });
@@ -158,7 +161,7 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
       clearHeartbeat();
       heartbeatTimerRef.current = window.setInterval(() => {
         if (!nextSession.session_id) return;
-        void api.heartbeatLiveSession(nextSession.session_id)
+        void api.heartbeatLiveSession(nextSession.session_id, nextSession.node_id)
           .then(setSession)
           .catch(() => undefined);
       }, 10000);
@@ -166,8 +169,14 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     } catch (err) {
       traceLive('startPreview:error', {
         kind: sourceKind,
+        durableLiveSessionCreateAttempted,
         message: err instanceof Error ? err.message : String(err),
       });
+      if (durableLiveSessionCreateAttempted) {
+        setError(err instanceof Error ? err.message : String(err));
+        setState('error');
+        throw err;
+      }
       if (sourceKind === 'screen') {
         setError('Screen capture is unavailable on this device/browser.');
       } else {
@@ -192,7 +201,7 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
 
       recorder.addEventListener('dataavailable', (event: BlobEvent) => {
         if (!event.data || event.data.size === 0) return;
-        void api.uploadLiveSessionChunk(session.session_id, event.data);
+        void api.uploadLiveSessionChunk(session.session_id, event.data, session.node_id);
       });
 
       recorder.addEventListener('start', () => {
@@ -225,7 +234,7 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
         });
       }
 
-      const ended = await api.endLiveSession(session.session_id);
+      const ended = await api.endLiveSession(session.session_id, session.node_id);
       setSession(ended.session);
       setLastClaimId(ended.claim_id);
       if (ended.claim_id) {

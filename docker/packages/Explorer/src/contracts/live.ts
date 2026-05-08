@@ -1,3 +1,5 @@
+import { isLiveRuntimeEventPayload } from './liveSessions';
+
 export type WebRtcLiveState =
   | 'waiting_for_answer'
   | 'connected'
@@ -22,12 +24,16 @@ export type WebRtcLiveSessionListResponse = {
 };
 
 export function normalizeWebRtcLiveSessions(payload: unknown): WebRtcLiveSession[] {
-  if (Array.isArray(payload)) return payload.filter(Boolean) as WebRtcLiveSession[];
+  const normalizeArray = (items: unknown[]): WebRtcLiveSession[] => (
+    items.filter((entry): entry is WebRtcLiveSession => Boolean(entry) && !isLiveRuntimeEventPayload(entry))
+  );
+
+  if (Array.isArray(payload)) return normalizeArray(payload);
 
   if (payload && typeof payload === 'object') {
     const maybe = payload as WebRtcLiveSessionListResponse;
     if (Array.isArray(maybe.sessions)) {
-      return maybe.sessions.filter(Boolean);
+      return normalizeArray(maybe.sessions);
     }
   }
 

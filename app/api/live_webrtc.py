@@ -9,7 +9,7 @@ Example:
 from __future__ import annotations
 
 from typing import Any
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -28,6 +28,21 @@ router = APIRouter(prefix="/api/live", tags=["live-webrtc"])
 - State owner: runtime.live_sessions / WebRtcLiveSessionRegistry.
 - Naming policy: /api/live is browser WebRTC signaling transport, not durable capture lifecycle.
 """
+
+
+WEBRTC_LIVE_SESSION_TTL_SECONDS = 60
+
+
+def _parse_utc_iso(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 class LiveOfferPayload(BaseModel):
@@ -136,6 +151,43 @@ def _registry(runtime: AppRuntime) -> WebRtcLiveSessionRegistry:
     return registry
 
 
+
+
+def _prune_stale_live_sessions(runtime: AppRuntime) -> list[str]:
+    service = runtime.services.live_session_service
+    if service is None:
+        return []
+    pruned_ids = service.prune_stale_sessions()
+    registry = runtime.live_sessions
+    if isinstance(registry, WebRtcLiveSessionRegistry):
+        for session_id in pruned_ids:
+            registry.delete(session_id)
+    return pruned_ids
+
+
+def _session_is_durable_inactive(runtime: AppRuntime, session_id: str) -> bool:
+    registry = runtime.services.live_session_registry
+    if registry is None:
+        return False
+    session = registry.get(session_id)
+    return bool(session and (not session.is_active or dict(session.metadata).get("superseded_by_session_id")))
+
+
+def _prune_orphaned_webrtc_sessions(runtime: AppRuntime) -> list[str]:
+    registry = _registry(runtime)
+    current = datetime.now(timezone.utc)
+    cutoff = current - timedelta(seconds=WEBRTC_LIVE_SESSION_TTL_SECONDS)
+    removed: list[str] = []
+    for session in list(registry.list()):
+        updated_at = _parse_utc_iso(session.updated_at)
+        durable_inactive = _session_is_durable_inactive(runtime, session.session_id)
+        transport_stale = updated_at is None or updated_at < cutoff
+        if not durable_inactive and not transport_stale:
+            continue
+        registry.delete(session.session_id)
+        removed.append(session.session_id)
+    return removed
+
 def _emit_event(runtime: AppRuntime, event_type: str, payload: dict[str, object]) -> None:
     bus = getattr(runtime, "events", None)
     if bus is None:
@@ -153,7 +205,11 @@ async def publish_offer(
     payload: LiveOfferPayload,
     runtime: AppRuntime = Depends(get_runtime),
 ) -> dict[str, object]:
+    _prune_stale_live_sessions(runtime)
     registry = _registry(runtime)
+    for existing in list(registry.list()):
+        if existing.session_id != session_id and existing.node_id == payload.node_id:
+            registry.delete(existing.session_id)
     session = registry.get(session_id)
     if session is None:
         session = registry.create(session_id=session_id, node_id=payload.node_id)
@@ -201,6 +257,7 @@ async def publish_viewer_answer(
     payload: LiveAnswerPayload,
     runtime: AppRuntime = Depends(get_runtime),
 ) -> dict[str, object]:
+    _prune_stale_live_sessions(runtime)
     registry = _registry(runtime)
     session = registry.get(session_id)
     if session is None:
@@ -301,6 +358,8 @@ async def publish_viewer_state(
 
 @router.get("", response_model=LiveWebRtcSessionListResponse)
 async def list_live_sessions(runtime: AppRuntime = Depends(get_runtime)) -> LiveWebRtcSessionListResponse:
+    _prune_stale_live_sessions(runtime)
+    _prune_orphaned_webrtc_sessions(runtime)
     registry = _registry(runtime)
     sessions = [LiveWebRtcSessionResponse(**_serialize_live_session(session, runtime)) for session in registry.list()]
     return LiveWebRtcSessionListResponse(sessions=sessions)
@@ -314,6 +373,7 @@ async def start_live_recording(
     payload: LiveRecordStartPayload,
     runtime: AppRuntime = Depends(get_runtime),
 ) -> dict[str, object]:
+    _prune_stale_live_sessions(runtime)
     registry = _registry(runtime)
     session = registry.get(session_id)
     if session is None:

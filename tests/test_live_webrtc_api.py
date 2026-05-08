@@ -410,3 +410,28 @@ def test_signal_answer_via_live_sessions_is_visible_in_api_live(client):
     assert match["has_answer"] is True
     assert match["state"] == "connected"
     assert match["has_offer"] is True
+
+
+def test_webrtc_runtime_events_remain_signal_records_not_durable_sessions(client):
+    session_id = "sess-webrtc-runtime-not-durable"
+    node_id = "node-webrtc-runtime-not-durable"
+    client.post(
+        f"/api/live/{session_id}/offer",
+        json={"node_id": node_id, "offer": {"type": "offer", "sdp": "v=0\r\no=offer"}},
+    )
+    client.post(
+        f"/api/live/{session_id}/viewers/viewer-a/answer",
+        json={"answer": {"type": "answer", "sdp": "v=0\r\no=answer"}},
+    )
+    client.post(f"/api/live/{session_id}/viewers/viewer-a/state", json={"state": "answer_confirmed"})
+
+    live = client.get("/api/live")
+    assert live.status_code == 200
+    match = next((entry for entry in live.json()["sessions"] if entry["session_id"] == session_id), None)
+    assert match is not None
+    assert match["has_answer"] is True
+    assert match["state"] == "connected"
+
+    durable = client.get("/api/live_sessions")
+    assert durable.status_code == 200
+    assert all(entry["session_id"] != session_id for entry in durable.json())
