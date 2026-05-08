@@ -1,3 +1,8 @@
+## 2026-05-08 — Add scoped fetch syntax regression guard (new)
+- [x] Added an explicit static contract that `startLiveSession` opens the durable `/api/live_sessions/start` `fetch(...)` request block immediately after broadcast diagnostics.
+- [x] Locked direct negative assertions for orphan `headers:` and `method: 'POST'` blocks after `markConnectDeviceBroadcastDebug(...)`.
+- [ ] Next validation item: restart/rebuild the actual LAN Explorer container and confirm `cda-desktop.local` serves this committed `api.ts`.
+
 ## 2026-05-08 — Harden API live-session cluster paste guards (new)
 - [x] Aligned `startLiveSession` missing-session validation with the repaired cluster body and kept the durable start request options inside the single `fetch(...)` call.
 - [x] Extended static guards to reject duplicated pasted `api.ts` module bodies and to lock `startLiveSession -> getLiveSession -> controlLiveSession -> sendLiveSessionControl -> uploadLiveSessionRecording` ordering.

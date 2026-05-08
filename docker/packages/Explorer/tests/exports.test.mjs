@@ -568,6 +568,31 @@ test('api client startLiveSession keeps durable start fetch opener before reques
   assert.ok(uploadMethodIndex > sendControlMethodIndex, 'uploadLiveSessionRecording must remain after sendLiveSessionControl');
 });
 
+test('api client startLiveSession has a scoped durable fetch request block', async () => {
+  const source = await fs.promises.readFile(
+    path.join(repoRoot, 'docker/packages/Explorer/src/api.ts'),
+    'utf8',
+  );
+
+  assert.match(
+    source,
+    /markConnectDeviceBroadcastDebug\(liveSessionCreateDiagnostics\);\s*const response = await fetch\(buildUrl\('\/api\/live_sessions\/start'\), \{\s*method: 'POST',\s*headers: \{/,
+    'startLiveSession must open fetch(buildUrl(...), { method, headers }) immediately after diagnostics marker',
+  );
+
+  assert.doesNotMatch(
+    source,
+    /markConnectDeviceBroadcastDebug\(liveSessionCreateDiagnostics\);\s*headers:\s*\{/,
+    'startLiveSession must not contain an orphan headers block after diagnostics marker',
+  );
+
+  assert.doesNotMatch(
+    source,
+    /markConnectDeviceBroadcastDebug\(liveSessionCreateDiagnostics\);\s*method:\s*'POST'/,
+    'startLiveSession must not contain an orphan method block after diagnostics marker',
+  );
+});
+
 test('explorer live sessions panel renders durable and webrtc sessions independently of preview chunks', () => {
   const appPath = path.join(packageRoot, 'src', 'ExplorerApp.tsx');
   const cardPath = path.join(packageRoot, 'src', 'components', 'LiveSourceCard.tsx');
