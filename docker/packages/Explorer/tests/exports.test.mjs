@@ -483,6 +483,12 @@ test('device live session start uses POST device lane and never GETs start as a 
   assert.ok(!startBody.includes('const authHeaders = getNodeAuthHeaders(nodeId);'));
   assert.ok(startBody.includes("durableLiveSessionCreateStatus = 'auth_required'"));
   assert.ok(startBody.includes("broadcastStartFailureClass = 'auth_required'"));
+  const afterStartBlock = api.slice(startMethodEnd, api.indexOf('async sendLiveSessionControl', startMethodEnd));
+  assert.ok(afterStartBlock.includes('async getLiveSession(sessionId: string): Promise<LiveSessionRecord>'));
+  assert.ok(afterStartBlock.includes('async controlLiveSession(sessionId: string, action: LiveSessionControlAction)'));
+  assert.ok(afterStartBlock.includes('throw new Error(`Failed to control live session: ${response.status}`);'));
+  assert.ok(!startBody.includes('Failed to control live session'));
+  assert.ok(!startBody.includes('return response.json();\n    },\n    async sendLiveSessionControl'));
   assert.ok(liveHook.includes('api.startLiveSession(nodeId, sourceKind'));
   assert.match(device, /await startPreview\('camera', \{\s*stream/);
   assert.ok(device.includes('cameraStreamResolved: true'));

@@ -1,3 +1,8 @@
+## 2026-05-08 — Verify startLiveSession method boundary (new)
+- [x] Locked static contracts that `startLiveSession` ends before `getLiveSession`/`controlLiveSession` and contains no loose control-session response handling.
+- [x] Reconfirmed `controlLiveSession` remains a standalone API client method after the durable live-session create wrapper.
+- [ ] Next validation item: rebuild the LAN Explorer bundle from the latest commit and continue Connect Device runtime testing once the overlay is gone.
+
 ## 2026-05-08 — Restore startLiveSession auth-required diagnostics (new)
 - [x] Restored `requireNodeAuthHeaders(nodeId)` in `startLiveSession` so missing device auth is classified as `auth_required` before any durable session POST.
 - [x] Kept the clean one-method API wrapper shape while extending diagnostics with explicit auth/create failure classes and no helper/spread fragments.
