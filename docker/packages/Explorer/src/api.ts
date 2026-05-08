@@ -323,6 +323,7 @@ export function createApiClient(baseUrl = ''): ApiClient {
           authHeaders.Authorization || authHeaders['X-Media-Sync-Node-Id'],
         );
         liveSessionCreateDiagnostics.liveSessionCreateAttempted = true;
+        // Keep this diagnostics marker immediately followed by the durable live-session POST.
         markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
 
           headers: {
