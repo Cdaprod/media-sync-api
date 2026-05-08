@@ -326,6 +326,8 @@ export function createApiClient(baseUrl = ''): ApiClient {
         // Keep this diagnostics marker immediately followed by the durable live-session POST.
         markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
 
+        const response = await fetch(buildUrl('/api/live_sessions/start'), {
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Accept: 'application/json',
