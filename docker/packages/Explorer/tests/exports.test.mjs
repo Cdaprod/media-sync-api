@@ -467,7 +467,7 @@ test('device live session start uses POST device lane and never GETs start as a 
   assert.ok(startBody.includes('liveSessionCreateDiagnostics.liveSessionCreateAttempted = true;'));
   assert.equal((startBody.match(/fetch\(buildUrl\('\/api\/live_sessions\/start'\)/g) || []).length, 1);
   assert.ok(startBody.includes("const response = await fetch(buildUrl('/api/live_sessions/start'), {"));
-  assert.ok(startBody.includes("markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);\n        const response = await fetch(buildUrl('/api/live_sessions/start'), {"));
+  assert.ok(startBody.includes("markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);\n\n        const response = await fetch(buildUrl('/api/live_sessions/start'), {"));
   assert.ok(!startBody.includes("markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);\n          method: 'POST'"));
   assert.ok(!startBody.includes("markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);\n        method: 'POST'"));
   assert.ok(!/markConnectDeviceBroadcastDebug\(liveSessionCreateDiagnostics\);\n\s+(method|headers|cache|body):/.test(startBody));
@@ -489,7 +489,7 @@ test('device live session start uses POST device lane and never GETs start as a 
   assert.ok(!startBody.includes('Object.assign(patch, liveSessionCreateDiagnostics)'));
   assert.ok(startBody.includes('const authHeaders = requireNodeAuthHeaders(nodeId);'));
   assert.ok(!startBody.includes('const authHeaders = getNodeAuthHeaders(nodeId);'));
-  assert.ok(startBody.includes("? 'auth_required'"));
+  assert.ok(startBody.includes("message.toLowerCase().includes('bearer')"));
   const getLiveSessionStart = api.indexOf('async getLiveSession', startMethodEnd);
   const controlLiveSessionStart = api.indexOf('async controlLiveSession', getLiveSessionStart);
   const sendControlStart = api.indexOf('async sendLiveSessionControl', controlLiveSessionStart);
@@ -499,8 +499,9 @@ test('device live session start uses POST device lane and never GETs start as a 
   const afterStartBlock = api.slice(startMethodEnd, sendControlStart);
   assert.ok(afterStartBlock.includes('async controlLiveSession('));
   assert.ok(afterStartBlock.includes('action: LiveSessionControlAction,'));
-  assert.ok(afterStartBlock.includes('const payload = await parseJson<LiveSessionRecord & { detail?: string }>(response);'));
-  assert.ok(afterStartBlock.includes('throw new Error(String(payload?.detail || `Failed to load live session: ${response.status}`));'));
+  assert.ok(afterStartBlock.includes('const payload = await parseJson<LiveSessionRecord & { detail?: string; message?: string }>(response);'));
+  assert.ok(afterStartBlock.includes('invalid_get_live_session_start'));
+  assert.ok(afterStartBlock.includes('throw new Error(String(payload?.detail || payload?.message || `Failed to load live session: ${response.status}`));'));
   assert.ok(afterStartBlock.includes('throw new Error(String(payload?.detail || `Failed to control live session: ${response.status}`));'));
   assert.ok(!/catch \(error\) \{[\s\S]*?\}\n\s*if \(!response\.ok\)/.test(startBody));
   assert.ok(!api.slice(startMethodEnd - 160, startMethodEnd).includes('Failed to control live session'));
@@ -516,6 +517,38 @@ test('device live session start uses POST device lane and never GETs start as a 
     assert.ok(!content.includes("fetch(buildUrl('/api/live_sessions/start'), {\n        method: 'GET'"), `${filePath} must not GET /api/live_sessions/start`);
     assert.ok(!content.includes("fetch(buildUrl(\"/api/live_sessions/start\"), {\n        method: 'GET'"), `${filePath} must not GET /api/live_sessions/start`);
   }
+
+});
+
+test('api client startLiveSession keeps durable start fetch opener before request options', () => {
+  const apiSource = fs.readFileSync(path.join(packageRoot, 'src', 'api.ts'), 'utf8');
+
+  const attemptedMarker = 'liveSessionCreateDiagnostics.liveSessionCreateAttempted = true;';
+  const fetchOpener = "const response = await fetch(buildUrl('/api/live_sessions/start'), {";
+
+  assert.ok(apiSource.includes(attemptedMarker), 'startLiveSession diagnostics attempt marker is missing');
+  assert.ok(apiSource.includes(fetchOpener), 'startLiveSession durable fetch opener is missing');
+  assert.equal(
+    (apiSource.match(/const response = await fetch\(buildUrl\('\/api\/live_sessions\/start'\), \{/g) || []).length,
+    1,
+    'startLiveSession durable fetch opener must exist exactly once',
+  );
+
+  const markerIndex = apiSource.indexOf(attemptedMarker);
+  const fetchIndex = apiSource.indexOf(fetchOpener);
+  const headersIndex = apiSource.indexOf("headers: {\n            'Content-Type': 'application/json'", markerIndex);
+
+  assert.ok(fetchIndex > markerIndex, 'durable fetch opener must appear after diagnostics attempt marker');
+  assert.ok(headersIndex > fetchIndex, 'request headers must be inside the durable fetch call');
+
+  const orphanPattern =
+    /markConnectDeviceBroadcastDebug\(liveSessionCreateDiagnostics\);\s*(?:method|headers|cache|body):/;
+
+  assert.equal(
+    orphanPattern.test(apiSource),
+    false,
+    'startLiveSession contains an orphan request-options block after diagnostics marker',
+  );
 });
 
 test('explorer live sessions panel renders durable and webrtc sessions independently of preview chunks', () => {

@@ -293,6 +293,7 @@ export function createApiClient(baseUrl = ''): ApiClient {
         source_kind: sourceKind,
         metadata,
       };
+
       const liveSessionCreateDiagnostics: {
         durableLiveSessionCreateRoute: string;
         durableLiveSessionCreatePayload: typeof payload;
@@ -314,13 +315,16 @@ export function createApiClient(baseUrl = ''): ApiClient {
         sessionIdAfterStartPreview: null,
         hasNodeAuthHeaders: false,
       };
+
       try {
         const authHeaders = requireNodeAuthHeaders(nodeId);
+
         liveSessionCreateDiagnostics.hasNodeAuthHeaders = Boolean(
           authHeaders.Authorization || authHeaders['X-Media-Sync-Node-Id'],
         );
         liveSessionCreateDiagnostics.liveSessionCreateAttempted = true;
         markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
+
           headers: {
             'Content-Type': 'application/json',
             Accept: 'application/json',
@@ -329,60 +333,86 @@ export function createApiClient(baseUrl = ''): ApiClient {
           cache: 'no-store',
           body: JSON.stringify(payload),
         });
-        const body = await parseJson<LiveSessionRecord & { detail?: string; message?: string }>(
-          response,
-        );
+
+        const body = await parseJson<LiveSessionRecord & { detail?: string; message?: string }>(response);
+
         liveSessionCreateDiagnostics.durableLiveSessionCreateStatus = response.status;
         liveSessionCreateDiagnostics.durableLiveSessionCreateResponse = body;
+
           const message = String(body?.detail || body?.message || `Failed to start live session: ${response.status}`);
+
           liveSessionCreateDiagnostics.liveSessionCreateError = message;
           liveSessionCreateDiagnostics.broadcastStartFailureClass =
             response.status === 401 || response.status === 403
               ? 'auth_failed'
               : 'live_session_create_failed';
           liveSessionCreateDiagnostics.lastFailureReason = `start_live_session_failed:${response.status}`;
+
           markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
           throw new Error(message);
         }
+
           liveSessionCreateDiagnostics.liveSessionCreateError = 'missing_session_id';
           liveSessionCreateDiagnostics.broadcastStartFailureClass = 'live_session_create_failed';
           liveSessionCreateDiagnostics.lastFailureReason = 'missing_session_id';
+
           markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
           throw new Error('Live session start returned no session_id');
         }
+
         liveSessionCreateDiagnostics.liveSessionCreateSucceeded = true;
         liveSessionCreateDiagnostics.sessionIdAfterStartPreview = body.session_id;
+
         markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
         return body;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+
         if (!liveSessionCreateDiagnostics.liveSessionCreateError) {
           liveSessionCreateDiagnostics.liveSessionCreateError = message;
         }
+
         if (!liveSessionCreateDiagnostics.broadcastStartFailureClass) {
           liveSessionCreateDiagnostics.broadcastStartFailureClass =
-            message === 'missing_device_bearer_token' || message.includes('bearer')
+            message === 'missing_device_bearer_token' || message.toLowerCase().includes('bearer')
               ? 'auth_required'
               : 'live_session_create_failed';
         }
+
         if (liveSessionCreateDiagnostics.durableLiveSessionCreateStatus === null) {
           liveSessionCreateDiagnostics.durableLiveSessionCreateStatus =
             liveSessionCreateDiagnostics.broadcastStartFailureClass === 'auth_required'
               ? 'auth_required'
               : null;
         }
+
         if (!liveSessionCreateDiagnostics.lastFailureReason) {
           liveSessionCreateDiagnostics.lastFailureReason =
             liveSessionCreateDiagnostics.broadcastStartFailureClass === 'auth_required'
               ? 'auth_required'
               : 'live_session_create_failed';
         }
+
         markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
         throw error;
       }
-      const payload = await parseJson<LiveSessionRecord & { detail?: string }>(response);
-        throw new Error(String(payload?.detail || `Failed to load live session: ${response.status}`));
+
+      if (sessionId === 'start') {
+        markConnectDeviceBroadcastDebug({
+          invalidGetLiveSessionStart: true,
+          invalidGetLiveSessionId: sessionId,
+          lastFailureReason: 'invalid_get_live_session_start',
+        });
+        throw new Error('invalid_get_live_session_start');
+      }
+
+
+      const payload = await parseJson<LiveSessionRecord & { detail?: string; message?: string }>(response);
+
+        throw new Error(String(payload?.detail || payload?.message || `Failed to load live session: ${response.status}`));
+
       return payload;
+
     async controlLiveSession(
       sessionId: string,
       action: LiveSessionControlAction,
@@ -392,8 +422,11 @@ export function createApiClient(baseUrl = ''): ApiClient {
         cache: 'no-store',
         body: JSON.stringify({ action }),
       });
+
       const payload = await parseJson<{ ok: boolean; action: LiveSessionControlAction; detail?: string }>(response);
+
         throw new Error(String(payload?.detail || `Failed to control live session: ${response.status}`));
+
       return payload;
     async sendLiveSessionControl(
       sessionId: string,

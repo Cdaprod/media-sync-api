@@ -1,3 +1,8 @@
+## 2026-05-08 — Replace corrupted Explorer API live-session method cluster (new)
+- [x] Replaced `startLiveSession`, `getLiveSession`, and `controlLiveSession` as a single contiguous `createApiClient` cluster so the durable start request options cannot float outside `fetch(...)`.
+- [x] Added a dedicated static guard that requires the durable start fetch opener exactly once and verifies request headers are inside that fetch call.
+- [ ] Next validation item: rebuild the LAN Explorer process from this commit and verify the browser is no longer serving a stale `src/api.ts` bundle.
+
 ## 2026-05-08 — Guard startLiveSession fetch opener integrity (new)
 - [x] Added static contract coverage that `startLiveSession` keeps the durable create `fetch(...)` opener directly after the diagnostics marker.
 - [x] Locked regression checks against orphaned `method`, `headers`, `cache`, or `body` request-option blocks floating after `markConnectDeviceBroadcastDebug(...)`.
