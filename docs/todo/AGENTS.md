@@ -1,3 +1,9 @@
+## 2026-05-08 — Repair Explorer API client contract (new)
+- [x] Added `ApiClient.getJson` to match the `createApiClient` returned object contract.
+- [x] Replaced `startLiveSession` with a single-try durable create flow that records complete diagnostics, classifies auth/create failures, validates `session_id`, and restores `getLiveSession`/`controlLiveSession` method boundaries.
+- [x] Extended Explorer static contracts for `getJson`, durable `/api/live_sessions/start` POST shape, method ordering, and stray response-handling regression guards.
+- [ ] Next validation item: verify real Connect Device Start Broadcast reports durable create diagnostics without regressing WebRTC viewer/publisher lanes.
+
 ## 2026-05-08 — Reapply clean startLiveSession API repair (new)
 - [x] Replaced `startLiveSession` in `src/api.ts` again with the full clean compiling method body, including the outer network `try/catch`, complete diagnostics fields, and `requireNodeAuthHeaders` auth-required path.
 - [x] Removed unused node-auth imports from `api.ts` so the API wrapper remains thin and easier to inspect during build failures.

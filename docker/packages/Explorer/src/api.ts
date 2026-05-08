@@ -71,6 +71,7 @@ export type LiveRecordingUploadResult = {
 export type RecordingSessionRecord = RecordingSession;
 
 export interface ApiClient {
+  getJson: (url: string) => Promise<Record<string, unknown>>;
   listSources: () => Promise<SourceControlRecord[]>;
   listNodes: () => Promise<NodeControlRecord[]>;
   heartbeatNode: (node: string | { nodeId: string; token?: string | null }) => Promise<NodeControlRecord>;
@@ -113,6 +114,7 @@ export interface ApiClient {
   endLiveSession: (sessionId: string, nodeId?: string | null) => Promise<{ session: LiveSessionRecord; claim_id: string | null }>;
   listLiveSessions: () => Promise<LiveSessionRecord[]>;
   listWebRtcLiveSessions: () => Promise<WebRtcLiveSession[]>;
+  getLiveOffer: (sessionId: string) => Promise<RTCSessionDescriptionInit | null>;
   postLiveViewerAnswer: (sessionId: string, viewerId: string, answer: RTCSessionDescriptionInit) => Promise<{ ok: boolean; session_id: string; viewer_id: string }>;
   postLiveViewerIce: (sessionId: string, viewerId: string, candidate: RTCIceCandidateInit) => Promise<{ ok: boolean; session_id: string; viewer_id: string }>;
   listLiveDeviceIce: (sessionId: string) => Promise<RTCIceCandidateInit[]>;
@@ -308,30 +310,20 @@ export function createApiClient(baseUrl = ''): ApiClient {
         durableLiveSessionCreatePayload: payload,
         durableLiveSessionCreateStatus: null,
         durableLiveSessionCreateResponse: null,
-        liveSessionCreateSucceeded: false,
+        liveSessionCreateAttempted: false,
         liveSessionCreateError: null,
         sessionIdAfterStartPreview: null,
         hasNodeAuthHeaders: false,
       };
 
-      let authHeaders: Record<string, string>;
-
       try {
-        authHeaders = requireNodeAuthHeaders(nodeId);
+        const authHeaders = requireNodeAuthHeaders(nodeId);
         liveSessionCreateDiagnostics.hasNodeAuthHeaders = Boolean(
           authHeaders.Authorization || authHeaders['X-Media-Sync-Node-Id'],
         );
+
+        liveSessionCreateDiagnostics.liveSessionCreateAttempted = true;
         markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        liveSessionCreateDiagnostics.durableLiveSessionCreateStatus = 'auth_required';
-        liveSessionCreateDiagnostics.liveSessionCreateError = message;
-        liveSessionCreateDiagnostics.broadcastStartFailureClass = 'auth_required';
-        liveSessionCreateDiagnostics.lastFailureReason = 'auth_required';
-        markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
-        throw error;
-      }
-        const response = await fetch(buildUrl('/api/live_sessions/start'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -342,48 +334,34 @@ export function createApiClient(baseUrl = ''): ApiClient {
           body: JSON.stringify(payload),
         });
 
-        let body: unknown = null;
-
-        try {
-          body = await response.json();
-        } catch {
-          body = null;
-        }
+        const body = await parseJson<LiveSessionRecord & { detail?: string; message?: string }>(response);
 
         liveSessionCreateDiagnostics.durableLiveSessionCreateStatus = response.status;
         liveSessionCreateDiagnostics.durableLiveSessionCreateResponse = body;
         if (!response.ok) {
-          const message =
-            body && typeof body === 'object' && 'detail' in body
-              ? String((body as { detail?: unknown }).detail)
-              : `Failed to start live session: ${response.status}`;
-
+          const message = String(body?.detail || body?.message || `Failed to start live session: ${response.status}`);
           liveSessionCreateDiagnostics.liveSessionCreateError = message;
           liveSessionCreateDiagnostics.broadcastStartFailureClass =
             response.status === 401 || response.status === 403
               ? 'auth_failed'
               : 'live_session_create_failed';
           liveSessionCreateDiagnostics.lastFailureReason = `start_live_session_failed:${response.status}`;
-
           markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
           throw new Error(message);
         }
-        const record = body as LiveSessionRecord;
-
-        liveSessionCreateDiagnostics.liveSessionCreateSucceeded = Boolean(record?.session_id);
-        liveSessionCreateDiagnostics.sessionIdAfterStartPreview = record?.session_id || null;
-
-        if (!record?.session_id) {
+        if (!body?.session_id) {
           liveSessionCreateDiagnostics.liveSessionCreateError = 'missing_session_id';
           liveSessionCreateDiagnostics.broadcastStartFailureClass = 'live_session_create_failed';
           liveSessionCreateDiagnostics.lastFailureReason = 'missing_session_id';
-
           markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
           throw new Error('Live session start returned no session_id');
         }
 
+        liveSessionCreateDiagnostics.liveSessionCreateSucceeded = true;
+        liveSessionCreateDiagnostics.sessionIdAfterStartPreview = body.session_id;
         markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
-        return record;
+
+        return body;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
 
@@ -392,19 +370,29 @@ export function createApiClient(baseUrl = ''): ApiClient {
         }
 
         if (!liveSessionCreateDiagnostics.broadcastStartFailureClass) {
-          liveSessionCreateDiagnostics.broadcastStartFailureClass = 'live_session_create_failed';
+          liveSessionCreateDiagnostics.broadcastStartFailureClass =
+            message === 'missing_device_bearer_token' || message.includes('bearer')
+              ? 'auth_required'
+              : 'live_session_create_failed';
+        }
+
+        if (liveSessionCreateDiagnostics.durableLiveSessionCreateStatus === null) {
+          liveSessionCreateDiagnostics.durableLiveSessionCreateStatus =
+            liveSessionCreateDiagnostics.broadcastStartFailureClass === 'auth_required'
+              ? 'auth_required'
+              : null;
+        }
+
+        if (!liveSessionCreateDiagnostics.lastFailureReason) {
+          liveSessionCreateDiagnostics.lastFailureReason =
+            liveSessionCreateDiagnostics.broadcastStartFailureClass === 'auth_required'
+              ? 'auth_required'
+              : 'live_session_create_failed';
         }
 
         markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
         throw error;
       }
-      if (!response.ok) {
-        throw new Error(`Failed to control live session: ${response.status}`);
-      }
-      return response.json();
-    },
-    async sendLiveSessionControl(sessionId: string, action: LiveSessionControlAction): Promise<{ ok: boolean; action: LiveSessionControlAction; session_id: string }> {
-      const response = await fetch(buildUrl(`/api/live_sessions/${encodeURIComponent(sessionId)}/control`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
