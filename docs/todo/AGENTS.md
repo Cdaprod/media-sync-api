@@ -1,3 +1,8 @@
+## 2026-05-08 — Remove live-session diagnostics spreads from API method (new)
+- [x] Removed every diagnostics spread from `startLiveSession` and copied diagnostic fields explicitly into `markConnectDeviceBroadcastDebug` payloads so no orphan spread can be emitted by merge edits.
+- [x] Updated static contracts to reject both `...liveSessionCreateDiagnostics` and `...getLiveSessionCreateDiagnosticsPatch()` inside the durable start method.
+- [ ] Next validation item: rebuild the LAN Explorer bundle and confirm `src/api.ts` no longer reports an expression-expected syntax error near diagnostics.
+
 ## 2026-05-08 — Durable live-session API syntax repair (new)
 - [x] Refactored `startLiveSession` diagnostics into an assigned `liveSessionCreateDiagnostics` object so diagnostic key/value pairs cannot appear as naked statements in the function body.
 - [x] Added static contract checks for the assigned diagnostics object and spread usage around `/api/live_sessions/start`.

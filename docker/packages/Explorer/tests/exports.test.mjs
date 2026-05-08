@@ -459,7 +459,11 @@ test('device live session start uses POST device lane and never GETs start as a 
   assert.ok(startMethodStart >= 0 && startMethodEnd > startMethodStart);
   const startBody = api.slice(startMethodStart, startMethodEnd);
   assert.ok(startBody.includes('const liveSessionCreateDiagnostics = {'));
-  assert.ok(startBody.includes('...liveSessionCreateDiagnostics'));
+  assert.ok(startBody.includes('const withLiveSessionCreateDiagnostics = (patch: Record<string, unknown>): Record<string, unknown> =>'));
+  assert.ok(startBody.includes('Object.assign(patch, liveSessionCreateDiagnostics)'));
+  assert.ok(!startBody.includes('...liveSessionCreateDiagnostics'));
+  assert.ok(!startBody.includes('...getLiveSessionCreateDiagnosticsPatch()'));
+  assert.ok(!startBody.includes('...withLiveSessionCreateDiagnostics'));
   assert.ok(startBody.includes('liveSessionCreateDiagnostics.liveSessionCreateError = message;'));
   assert.ok(startBody.includes('liveSessionCreateDiagnostics.liveSessionCreateSucceeded = Boolean(payload?.session_id);'));
   assert.ok(startBody.includes("buildUrl('/api/live_sessions/start')"));

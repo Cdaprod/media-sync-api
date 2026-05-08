@@ -287,21 +287,22 @@ export function createApiClient(baseUrl = ''): ApiClient {
         liveSessionCreateSucceeded: false,
         liveSessionCreateError: null as string | null,
       };
-        ...liveSessionCreateDiagnostics,
-        liveSessionCreateDiagnostics.liveSessionCreateError = message;
-          ...liveSessionCreateDiagnostics,
-        ...liveSessionCreateDiagnostics,
-        liveSessionCreateDiagnostics.liveSessionCreateError = `Failed to start live session: ${response.status}`;
-          ...liveSessionCreateDiagnostics,
-      liveSessionCreateDiagnostics.liveSessionCreateSucceeded = Boolean(payload?.session_id);
-      liveSessionCreateDiagnostics.liveSessionCreateError = payload?.session_id
-        ? null
-        : 'durable live session response missing session_id';
-      markConnectDeviceBroadcastDebug({
-        ...liveSessionCreateDiagnostics,
-        startLiveSessionSessionId: null,
-        startLiveSessionWrongGetDetected: false,
-        nodeId,
+      const withLiveSessionCreateDiagnostics = (patch: Record<string, unknown>): Record<string, unknown> =>
+        Object.assign(patch, liveSessionCreateDiagnostics);
+
+      markConnectDeviceBroadcastDebug(withLiveSessionCreateDiagnostics({
+      }));
+
+        markConnectDeviceBroadcastDebug(withLiveSessionCreateDiagnostics({
+        }));
+
+      markConnectDeviceBroadcastDebug(withLiveSessionCreateDiagnostics({
+      }));
+        markConnectDeviceBroadcastDebug(withLiveSessionCreateDiagnostics({
+        }));
+
+      markConnectDeviceBroadcastDebug(withLiveSessionCreateDiagnostics({
+      }));
         hasNodeAuthHeaders: Boolean(authHeaders.Authorization && authHeaders['X-Media-Sync-Node-Id']),
       });
       const response = await fetch(buildUrl('/api/live_sessions/start'), {
