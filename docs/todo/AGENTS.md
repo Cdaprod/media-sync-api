@@ -1,3 +1,8 @@
+## 2026-05-08 — Harden API live-session cluster paste guards (new)
+- [x] Aligned `startLiveSession` missing-session validation with the repaired cluster body and kept the durable start request options inside the single `fetch(...)` call.
+- [x] Extended static guards to reject duplicated pasted `api.ts` module bodies and to lock `startLiveSession -> getLiveSession -> controlLiveSession -> sendLiveSessionControl -> uploadLiveSessionRecording` ordering.
+- [ ] Next validation item: restart/rebuild the LAN Explorer server from this commit and confirm the browser is not serving a stale corrupted bundle.
+
 ## 2026-05-08 — Replace corrupted Explorer API live-session method cluster (new)
 - [x] Replaced `startLiveSession`, `getLiveSession`, and `controlLiveSession` as a single contiguous `createApiClient` cluster so the durable start request options cannot float outside `fetch(...)`.
 - [x] Added a dedicated static guard that requires the durable start fetch opener exactly once and verifies request headers are inside that fetch call.

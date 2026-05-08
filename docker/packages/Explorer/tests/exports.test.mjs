@@ -549,6 +549,23 @@ test('api client startLiveSession keeps durable start fetch opener before reques
     false,
     'startLiveSession contains an orphan request-options block after diagnostics marker',
   );
+  assert.equal(
+    (apiSource.match(/^import type \{ LibrarySnapshot/mg) || []).length,
+    1,
+    'api.ts must not contain a duplicated pasted module body',
+  );
+
+  const startMethodIndex = apiSource.indexOf('async startLiveSession(');
+  const getMethodIndex = apiSource.indexOf('async getLiveSession(', startMethodIndex);
+  const controlMethodIndex = apiSource.indexOf('async controlLiveSession(', getMethodIndex);
+  const sendControlMethodIndex = apiSource.indexOf('async sendLiveSessionControl(', controlMethodIndex);
+  const uploadMethodIndex = apiSource.indexOf('async uploadLiveSessionRecording(', sendControlMethodIndex);
+
+  assert.ok(startMethodIndex >= 0, 'startLiveSession object method is missing');
+  assert.ok(getMethodIndex > startMethodIndex, 'getLiveSession must remain after startLiveSession');
+  assert.ok(controlMethodIndex > getMethodIndex, 'controlLiveSession must remain after getLiveSession');
+  assert.ok(sendControlMethodIndex > controlMethodIndex, 'sendLiveSessionControl must remain after controlLiveSession');
+  assert.ok(uploadMethodIndex > sendControlMethodIndex, 'uploadLiveSessionRecording must remain after sendLiveSessionControl');
 });
 
 test('explorer live sessions panel renders durable and webrtc sessions independently of preview chunks', () => {

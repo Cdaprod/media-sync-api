@@ -352,7 +352,7 @@ export function createApiClient(baseUrl = ''): ApiClient {
           throw new Error(message);
         }
 
-          liveSessionCreateDiagnostics.liveSessionCreateError = 'missing_session_id';
+        if (!body || !body.session_id) {
           liveSessionCreateDiagnostics.broadcastStartFailureClass = 'live_session_create_failed';
           liveSessionCreateDiagnostics.lastFailureReason = 'missing_session_id';
 
