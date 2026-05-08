@@ -153,6 +153,7 @@ function markExplorerLiveFlowDebug(patch: Record<string, unknown>) {
     invalidAnswerGetDetected: false,
     invalidViewerHeartbeatDetected: false,
     ...patch,
+    signalingLane: 'durable-live-sessions',
     lastUpdatedAt: Date.now(),
   };
 }
@@ -160,9 +161,12 @@ function markExplorerLiveFlowDebug(patch: Record<string, unknown>) {
 function markExplorerViewerPeerDebug(patch: Record<string, unknown>) {
   if (typeof window === 'undefined') return;
   const current = ((window as any).__explorerViewerPeerDebug || {}) as Record<string, unknown>;
+  // Active viewer signaling lane is the durable /api/live_sessions/{id}/signal API.
+  // /api/live remains a runtime/listing mirror only.
   (window as any).__explorerViewerPeerDebug = {
     ...current,
     ...patch,
+    signalingLane: 'durable-live-sessions',
     lastUpdatedAt: Date.now(),
   };
 }
