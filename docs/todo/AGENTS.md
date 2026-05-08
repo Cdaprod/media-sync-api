@@ -1,3 +1,8 @@
+## 2026-05-08 — Durable live-session API syntax repair (new)
+- [x] Refactored `startLiveSession` diagnostics into an assigned `liveSessionCreateDiagnostics` object so diagnostic key/value pairs cannot appear as naked statements in the function body.
+- [x] Added static contract checks for the assigned diagnostics object and spread usage around `/api/live_sessions/start`.
+- [ ] Next validation item: rerun the Next.js Explorer build on the LAN host and confirm `src/api.ts` no longer reports a syntax failure around `startLiveSession`.
+
 ## 2026-05-07 — Connect Device durable live-session creation gate (new)
 - [x] Made `useLiveSession.startPreview` rethrow durable `/api/live_sessions/start` failures after preserving the camera preview, so Connect Device can classify auth/create failures and skip WebRTC offer publication.
 - [x] Hardened `handleStartBroadcast` ordering around durable session creation: camera ready, durable create, session id validation, runtime/session publication, Explorer refresh, then peer offer.

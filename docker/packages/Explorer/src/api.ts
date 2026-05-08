@@ -282,20 +282,23 @@ export function createApiClient(baseUrl = ''): ApiClient {
       return response.json();
     },
     async startLiveSession(nodeId: string, sourceKind: LiveSourceKind, metadata: Record<string, unknown> = {}): Promise<LiveSessionRecord> {
+      const liveSessionCreateDiagnostics = {
         liveSessionCreateAttempted: true,
         liveSessionCreateSucceeded: false,
-        liveSessionCreateError: null,
-          liveSessionCreateAttempted: true,
-          liveSessionCreateSucceeded: false,
-        liveSessionCreateAttempted: true,
-          liveSessionCreateAttempted: true,
-          liveSessionCreateSucceeded: false,
-        liveSessionCreateAttempted: true,
-      const authHeaders = requireNodeAuthHeaders(nodeId);
+        liveSessionCreateError: null as string | null,
+      };
+        ...liveSessionCreateDiagnostics,
+        liveSessionCreateDiagnostics.liveSessionCreateError = message;
+          ...liveSessionCreateDiagnostics,
+        ...liveSessionCreateDiagnostics,
+        liveSessionCreateDiagnostics.liveSessionCreateError = `Failed to start live session: ${response.status}`;
+          ...liveSessionCreateDiagnostics,
+      liveSessionCreateDiagnostics.liveSessionCreateSucceeded = Boolean(payload?.session_id);
+      liveSessionCreateDiagnostics.liveSessionCreateError = payload?.session_id
+        ? null
+        : 'durable live session response missing session_id';
       markConnectDeviceBroadcastDebug({
-        startLiveSessionMethod: 'POST',
-        startLiveSessionUrl: '/api/live_sessions/start',
-        startLiveSessionStatus: 'pending',
+        ...liveSessionCreateDiagnostics,
         startLiveSessionSessionId: null,
         startLiveSessionWrongGetDetected: false,
         nodeId,
