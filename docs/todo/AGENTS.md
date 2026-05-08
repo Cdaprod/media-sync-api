@@ -1,3 +1,8 @@
+## 2026-05-08 — Repair live-session method block replacement (new)
+- [x] Replaced the full `createApiClient` live-session section from `startLiveSession` through `sendLiveSessionControl` with the corrected contiguous object-method block.
+- [x] Restored parsed error payload handling for `getLiveSession`, `controlLiveSession`, and `sendLiveSessionControl` while keeping WebRTC/ICE/rendering logic untouched.
+- [ ] Next validation item: rebuild the deployed Explorer bundle on the LAN host and verify the stale `method: 'POST'` orphan syntax overlay is gone.
+
 ## 2026-05-08 — Repair Explorer API client contract (new)
 - [x] Added `ApiClient.getJson` to match the `createApiClient` returned object contract.
 - [x] Replaced `startLiveSession` with a single-try durable create flow that records complete diagnostics, classifies auth/create failures, validates `session_id`, and restores `getLiveSession`/`controlLiveSession` method boundaries.

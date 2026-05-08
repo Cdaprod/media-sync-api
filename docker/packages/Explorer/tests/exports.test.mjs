@@ -492,9 +492,11 @@ test('device live session start uses POST device lane and never GETs start as a 
   assert.ok(controlLiveSessionStart > getLiveSessionStart);
   assert.ok(sendControlStart > controlLiveSessionStart);
   const afterStartBlock = api.slice(startMethodEnd, sendControlStart);
-  assert.ok(afterStartBlock.includes('throw new Error(`Failed to get live session: ${response.status}`);'));
-  assert.ok(afterStartBlock.includes('throw new Error(`Failed to control live session: ${response.status}`);'));
-  assert.ok(!startBody.includes('Failed to control live session'));
+  assert.ok(afterStartBlock.includes('async controlLiveSession('));
+  assert.ok(afterStartBlock.includes('action: LiveSessionControlAction,'));
+  assert.ok(afterStartBlock.includes('const payload = await parseJson<LiveSessionRecord & { detail?: string }>(response);'));
+  assert.ok(afterStartBlock.includes('throw new Error(String(payload?.detail || `Failed to load live session: ${response.status}`));'));
+  assert.ok(afterStartBlock.includes('throw new Error(String(payload?.detail || `Failed to control live session: ${response.status}`));'));
   assert.ok(!/catch \(error\) \{[\s\S]*?\}\n\s*if \(!response\.ok\)/.test(startBody));
   assert.ok(!api.slice(startMethodEnd - 160, startMethodEnd).includes('Failed to control live session'));
   assert.ok(!startBody.includes('return response.json();\n    },\n    async sendLiveSessionControl'));
