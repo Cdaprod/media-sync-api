@@ -1,3 +1,8 @@
+## 2026-05-08 — Reapply clean startLiveSession API repair (new)
+- [x] Replaced `startLiveSession` in `src/api.ts` again with the full clean compiling method body, including the outer network `try/catch`, complete diagnostics fields, and `requireNodeAuthHeaders` auth-required path.
+- [x] Removed unused node-auth imports from `api.ts` so the API wrapper remains thin and easier to inspect during build failures.
+- [ ] Next validation item: use the Explorer build output to confirm `src/api.ts` compiles, then resume Connect Device broadcast runtime testing.
+
 ## 2026-05-08 — Verify startLiveSession method boundary (new)
 - [x] Locked static contracts that `startLiveSession` ends before `getLiveSession`/`controlLiveSession` and contains no loose control-session response handling.
 - [x] Reconfirmed `controlLiveSession` remains a standalone API client method after the durable live-session create wrapper.

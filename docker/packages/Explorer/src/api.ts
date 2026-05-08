@@ -23,7 +23,7 @@ import type {
   LiveSignalState,
   LiveSourceKind,
 } from './types/liveSession';
-import { buildNodeAuthHeaders, getBrowserRuntimeIdentityDiagnostics, getNodeAuthHeaders, getStoredNodeToken, requireNodeAuthHeaders, resolveBrowserRuntimeAuth } from './lib/browserRuntimeIdentity';
+import { buildNodeAuthHeaders, requireNodeAuthHeaders, resolveBrowserRuntimeAuth } from './lib/browserRuntimeIdentity';
 
 export interface ResolveRequest {
   project: string;
@@ -291,6 +291,7 @@ export function createApiClient(baseUrl = ''): ApiClient {
         source_kind: sourceKind,
         metadata,
       };
+
       const liveSessionCreateDiagnostics: {
         durableLiveSessionCreateRoute: string;
         durableLiveSessionCreatePayload: typeof payload;
@@ -312,7 +313,9 @@ export function createApiClient(baseUrl = ''): ApiClient {
         sessionIdAfterStartPreview: null,
         hasNodeAuthHeaders: false,
       };
+
       let authHeaders: Record<string, string>;
+
       try {
         authHeaders = requireNodeAuthHeaders(nodeId);
         liveSessionCreateDiagnostics.hasNodeAuthHeaders = Boolean(
@@ -338,12 +341,15 @@ export function createApiClient(baseUrl = ''): ApiClient {
           cache: 'no-store',
           body: JSON.stringify(payload),
         });
+
         let body: unknown = null;
+
         try {
           body = await response.json();
         } catch {
           body = null;
         }
+
         liveSessionCreateDiagnostics.durableLiveSessionCreateStatus = response.status;
         liveSessionCreateDiagnostics.durableLiveSessionCreateResponse = body;
         if (!response.ok) {
@@ -351,35 +357,44 @@ export function createApiClient(baseUrl = ''): ApiClient {
             body && typeof body === 'object' && 'detail' in body
               ? String((body as { detail?: unknown }).detail)
               : `Failed to start live session: ${response.status}`;
+
           liveSessionCreateDiagnostics.liveSessionCreateError = message;
           liveSessionCreateDiagnostics.broadcastStartFailureClass =
             response.status === 401 || response.status === 403
               ? 'auth_failed'
               : 'live_session_create_failed';
           liveSessionCreateDiagnostics.lastFailureReason = `start_live_session_failed:${response.status}`;
+
           markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
           throw new Error(message);
         }
         const record = body as LiveSessionRecord;
+
         liveSessionCreateDiagnostics.liveSessionCreateSucceeded = Boolean(record?.session_id);
         liveSessionCreateDiagnostics.sessionIdAfterStartPreview = record?.session_id || null;
+
         if (!record?.session_id) {
           liveSessionCreateDiagnostics.liveSessionCreateError = 'missing_session_id';
           liveSessionCreateDiagnostics.broadcastStartFailureClass = 'live_session_create_failed';
           liveSessionCreateDiagnostics.lastFailureReason = 'missing_session_id';
+
           markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
           throw new Error('Live session start returned no session_id');
         }
+
         markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
         return record;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+
         if (!liveSessionCreateDiagnostics.liveSessionCreateError) {
           liveSessionCreateDiagnostics.liveSessionCreateError = message;
         }
+
         if (!liveSessionCreateDiagnostics.broadcastStartFailureClass) {
           liveSessionCreateDiagnostics.broadcastStartFailureClass = 'live_session_create_failed';
         }
+
         markConnectDeviceBroadcastDebug(liveSessionCreateDiagnostics);
         throw error;
       }
