@@ -282,6 +282,15 @@ export function createApiClient(baseUrl = ''): ApiClient {
       return response.json();
     },
     async startLiveSession(nodeId: string, sourceKind: LiveSourceKind, metadata: Record<string, unknown> = {}): Promise<LiveSessionRecord> {
+        liveSessionCreateAttempted: true,
+        liveSessionCreateSucceeded: false,
+        liveSessionCreateError: null,
+          liveSessionCreateAttempted: true,
+          liveSessionCreateSucceeded: false,
+        liveSessionCreateAttempted: true,
+          liveSessionCreateAttempted: true,
+          liveSessionCreateSucceeded: false,
+        liveSessionCreateAttempted: true,
       const authHeaders = requireNodeAuthHeaders(nodeId);
       markConnectDeviceBroadcastDebug({
         startLiveSessionMethod: 'POST',

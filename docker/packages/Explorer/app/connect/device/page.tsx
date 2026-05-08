@@ -244,12 +244,14 @@ export default function ConnectDevicePage() {
 
   const classifyBroadcastStartFailure = (
     error: unknown,
-  ): 'auth_failed' | 'live_session_create_failed' => {
+  ): 'auth_required' | 'auth_failed' | 'live_session_create_failed' => {
     const message =
       error instanceof Error ? error.message : String(error || '');
-    return /401|403|auth|token/i.test(message)
-      ? 'auth_failed'
-      : 'live_session_create_failed';
+    if (/missing_device_bearer_token|auth_required/i.test(message))
+      return 'auth_required';
+    if (/401|403|auth_failed|forbidden|unauthorized/i.test(message))
+      return 'auth_failed';
+    return 'live_session_create_failed';
   };
 
   const markPublisherPeerDebug = useCallback(
@@ -775,6 +777,18 @@ export default function ConnectDevicePage() {
     stream: MediaStream,
   ) => {
     const sessionId = sessionRecord.session_id;
+    if (!sessionId) {
+      markBroadcastDebug({
+        lastPeerError: 'missing_session_id_before_offer',
+        offerCreated: false,
+        offerPosted: false,
+      });
+      markPublisherPeerDebug({
+        failureReason: 'missing_session_id_before_offer',
+      });
+      setPeerStatus('idle');
+      throw new Error('missing_session_id_before_offer');
+    }
     appendTrace(`peer:create ${sessionId}`);
     traceDevice('peer:create', {
       sessionId,

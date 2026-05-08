@@ -3894,6 +3894,9 @@ test('connect device route keeps canonical shim and deterministic broadcast wiri
   assert.ok(shim.includes("export { default } from './page';"));
   assert.ok(page.includes('const handleStartBroadcast = async () => {'));
   assert.match(page, /const publishPeerOffer = async \(\s*sessionRecord: \{ session_id: string \},\s*stream: MediaStream,?\s*\) => \{/);
+  assert.ok(page.includes("if (!sessionId) {"));
+  assert.ok(page.includes("missing_session_id_before_offer"));
+  assert.ok(page.includes("setPeerStatus('idle')"));
   assert.ok(page.includes('watchLiveSession('));
   assert.match(page, /startPreview\('camera', \{\s*stream/);
   assert.match(page, /await publishPeerOffer\(nextSession,\s*stream\);/);
@@ -3915,6 +3918,11 @@ test('connect device route keeps canonical shim and deterministic broadcast wiri
   assert.ok(picker.includes('other local capture nodes'));
   assert.ok(liveHook.includes('const startPreview = useCallback(async (sourceKind: LiveSourceKind, options?: PreviewStartOptions): Promise<LiveSessionRecord | null>'));
   assert.ok(liveHook.includes('const stream = options?.stream ?? ('));
+  assert.ok(liveHook.includes('const nextSession = await api.startLiveSession(nodeId, sourceKind'));
+  assert.ok(!liveHook.includes('listWebRtcLiveSessions('));
+  assert.ok(!liveHook.includes('postLiveViewerAnswer('));
+  assert.ok(liveHook.includes('durableLiveSessionCreateAttempted = true;'));
+  assert.ok(liveHook.includes('throw err;'));
   assert.ok(cameraHook.includes('navigator.mediaDevices.getUserMedia'));
 });
 
@@ -4136,6 +4144,7 @@ test('connect/device monitor controls and broadcast creation failure contracts s
   assert.ok(page.includes('broadcastStartRequestedAt'));
   assert.ok(page.includes('broadcastStartFailedAt'));
   assert.ok(page.includes('broadcastStartFailureClass'));
+  assert.ok(page.includes("return 'auth_required';"));
   assert.ok(page.includes('nodeIdAtBroadcastStart'));
   assert.ok(page.includes('hasNodeTokenAtBroadcastStart'));
   assert.ok(page.includes('liveSessionCreateAttempted'));
@@ -4153,6 +4162,20 @@ test('connect/device monitor controls and broadcast creation failure contracts s
   assert.ok(page.indexOf('if (!nextSession?.session_id) {') < page.indexOf('setActiveRuntimeSession(nextSession.session_id'));
   assert.ok(page.includes("requestExplorerRefresh('device-live-session-created')"));
   assert.ok(page.includes("requestExplorerRefresh('device-offer-published')"));
+  const startBroadcastBlock = page.slice(page.indexOf('const handleStartBroadcast = async () => {'), page.indexOf('async function watchLiveSession', page.indexOf('const handleStartBroadcast = async () => {')));
+  const ensureIndex = startBroadcastBlock.indexOf('await ensureCameraStreamReady()');
+  const startPreviewIndex = startBroadcastBlock.indexOf("await startPreview('camera'");
+  const validateSessionIndex = startBroadcastBlock.indexOf('if (!nextSession?.session_id) {');
+  const setRuntimeIndex = startBroadcastBlock.indexOf('setActiveRuntimeSession(nextSession.session_id');
+  const publishRuntimeIndex = startBroadcastBlock.indexOf('publishBrowserRuntimeSession(nextSession.session_id');
+  const refreshIndex = startBroadcastBlock.indexOf("requestExplorerRefresh('device-live-session-created')");
+  const publishOfferIndex = startBroadcastBlock.indexOf('await publishPeerOffer(nextSession, stream);');
+  assert.ok(ensureIndex >= 0 && ensureIndex < startPreviewIndex);
+  assert.ok(startPreviewIndex < validateSessionIndex);
+  assert.ok(validateSessionIndex < setRuntimeIndex);
+  assert.ok(setRuntimeIndex < publishRuntimeIndex);
+  assert.ok(publishRuntimeIndex < refreshIndex);
+  assert.ok(refreshIndex < publishOfferIndex);
 });
 
 test('connect/device page.tsx emits structured broadcast diagnostics on window.__connectDeviceBroadcastDebug', () => {
@@ -4235,6 +4258,8 @@ test('Explorer does not render WebRTC-only offers as durable LiveSourceCard sess
   assert.ok(renderBlock.includes('<LiveSourceCard'));
   assert.ok(!renderBlock.includes('webRtcOnlyOfferSessions'));
   assert.ok(explorer.includes('webRtcOnlyOffersDiagnosticOnly: true'));
+  assert.ok(explorer.includes('webRtcOnlyOfferSessions'));
+  assert.ok(explorer.includes('webRtcOnlyOfferSessionIds'));
 });
 
 test('live panels and device instances share canonical session selection', () => {

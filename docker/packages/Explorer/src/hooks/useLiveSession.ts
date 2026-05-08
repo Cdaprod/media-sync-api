@@ -109,6 +109,8 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
       return `${domErr?.name || 'CameraError'}: ${domErr?.message || 'Unable to start camera preview.'}`;
     };
 
+    let durableLiveSessionCreateAttempted = false;
+
     try {
       traceLive('startPreview:begin', { kind: sourceKind, hasExternalStream: !!options?.stream });
       const old = videoRef.current?.srcObject;
@@ -147,6 +149,7 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
       }
 
       setState('starting');
+      durableLiveSessionCreateAttempted = true;
       const nextSession = await api.startLiveSession(nodeId, sourceKind, {
         origin: 'browser',
       });
@@ -166,8 +169,14 @@ export function useLiveSession(api: ApiShape, nodeId: string | null) {
     } catch (err) {
       traceLive('startPreview:error', {
         kind: sourceKind,
+        durableLiveSessionCreateAttempted,
         message: err instanceof Error ? err.message : String(err),
       });
+      if (durableLiveSessionCreateAttempted) {
+        setError(err instanceof Error ? err.message : String(err));
+        setState('error');
+        throw err;
+      }
       if (sourceKind === 'screen') {
         setError('Screen capture is unavailable on this device/browser.');
       } else {

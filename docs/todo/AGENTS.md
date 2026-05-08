@@ -1,3 +1,9 @@
+## 2026-05-07 — Connect Device durable live-session creation gate (new)
+- [x] Made `useLiveSession.startPreview` rethrow durable `/api/live_sessions/start` failures after preserving the camera preview, so Connect Device can classify auth/create failures and skip WebRTC offer publication.
+- [x] Hardened `handleStartBroadcast` ordering around durable session creation: camera ready, durable create, session id validation, runtime/session publication, Explorer refresh, then peer offer.
+- [x] Added runtime guards and static contracts proving `publishPeerOffer`, `setActiveRuntimeSession`, and `publishBrowserRuntimeSession` cannot run without a durable `session_id`, while `/api/live` offers remain diagnostic-only.
+- [ ] Next validation item: on a real Connect Device tab, clear node auth and confirm Start Broadcast leaves camera preview alive, peer status idle, stage failed, and `broadcastStartFailureClass: auth_required` with no offer posted.
+
 ## 2026-05-07 — Durable-only live cards for WebRTC offers (new)
 - [x] Kept `/api/live_sessions` as the only source of LiveSourceCard render authority; `/api/live` WebRTC offer inventory now only annotates matching durable session ids.
 - [x] Classified `/api/live` offers with no durable record as diagnostic-only `webRtcOnlyOfferSessions` so they cannot use `/api/live_sessions/{id}/signal` and 404/reload-loop as synthetic cards.
