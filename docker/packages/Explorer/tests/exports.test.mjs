@@ -4768,3 +4768,56 @@ test('live_sessions.py declares durable signaling authority and bridge mirror to
   assert.ok(content.includes('def _bridge_signal_answer('));
   assert.ok(content.includes('def _bridge_signal_ice('));
 });
+
+test('connect/device publisher discovers real dynamic viewer id and never pins viewer-broadcast as active state', () => {
+  const devicePagePath = path.join(packageRoot, 'app', 'connect', 'device', 'page.tsx');
+  const device = fs.readFileSync(devicePagePath, 'utf8');
+
+  // The active publisher viewer-id ref must default to null. The dynamic
+  // viewer-* id is the only legitimate active runtime state.
+  assert.ok(
+    device.includes('const activeViewerIdRef = useRef<string | null>(null);'),
+    'activeViewerIdRef must be nullable and start as null, not pinned to viewer-broadcast',
+  );
+
+  // No code path may re-pin the active viewer state to viewer-broadcast.
+  assert.ok(
+    !device.includes("activeViewerIdRef.current = 'viewer-broadcast'"),
+    'active viewer-id state must not be reset to viewer-broadcast — that fake id was the source-of-truth bug',
+  );
+
+  // Publisher must discover the real dynamic viewer id from the durable signal
+  // state and re-poll scoped to that viewer so answer/ICE come from the right slot.
+  assert.ok(
+    device.includes('const collectViewerIdsFromSignal'),
+    'publisher must collect real viewer ids from signal state',
+  );
+  assert.ok(
+    device.includes('const resolvePublisherViewerId'),
+    'publisher must resolve a real viewer id (not viewer-broadcast) for active state',
+  );
+  assert.match(
+    device,
+    /api\s*\.\s*getLiveSignalState\(\s*sessionId\s*,\s*resolvedViewerId\s*\)/,
+    'publisher must re-poll signal state scoped to the resolved viewer-* id',
+  );
+
+  // Viewer-broadcast may still be used as the pre-discovery ICE bucket name so
+  // the backend merge logic continues to forward early candidates, but only as
+  // a fallback when activeViewerIdRef.current is still null.
+  assert.match(
+    device,
+    /activeViewerIdRef\.current \|\| 'viewer-broadcast'/,
+    'device ICE must prefer the real activeViewerIdRef and fall back to viewer-broadcast bucket only when undiscovered',
+  );
+
+  // Publisher debug must surface the dynamic viewer id so we can verify the wiring.
+  assert.ok(
+    device.includes('viewerAnswerApplied: true'),
+    'publisher debug must stamp viewerAnswerApplied so RTP-not-flowing diagnostics are unambiguous',
+  );
+  assert.ok(
+    device.includes("viewerIdResolution: 'signal-discovery'"),
+    'publisher debug must record how the active viewer id was resolved',
+  );
+});

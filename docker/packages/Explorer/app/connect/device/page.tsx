@@ -174,7 +174,7 @@ export default function ConnectDevicePage() {
   const appliedViewerIceKeysRef = useRef<Set<string>>(new Set());
   const queuedViewerIceRef = useRef<RTCIceCandidateInit[]>([]);
   const viewerIceAddErrorsRef = useRef<Array<Record<string, string>>>([]);
-  const activeViewerIdRef = useRef<string>('viewer-broadcast');
+  const activeViewerIdRef = useRef<string | null>(null);
   const signalPollTimerRef = useRef<number | null>(null);
   const publisherSignalPollLoopCountRef = useRef(0);
   const deviceIcePublishedCountRef = useRef(0);
@@ -493,7 +493,7 @@ export default function ConnectDevicePage() {
       appliedViewerIceKeysRef.current.clear();
       queuedViewerIceRef.current = [];
       viewerIceAddErrorsRef.current = [];
-      activeViewerIdRef.current = 'viewer-broadcast';
+      activeViewerIdRef.current = null;
       clearNodeHeartbeatTimer();
       if (viewerPollTimerRef.current != null) {
         window.clearInterval(viewerPollTimerRef.current);
@@ -785,6 +785,39 @@ export default function ConnectDevicePage() {
     });
   };
 
+  const isPublisherViewerIdReal = (viewerId: string | null | undefined): viewerId is string =>
+    typeof viewerId === 'string' &&
+    viewerId.length > 0 &&
+    viewerId !== 'viewer-broadcast' &&
+    viewerId !== 'viewer-unscoped' &&
+    viewerId !== 'viewer-default';
+
+  const collectViewerIdsFromSignal = (signal: unknown): string[] => {
+    const ids = new Set<string>();
+    if (!signal || typeof signal !== 'object') return [];
+    const root = signal as Record<string, unknown>;
+    for (const key of ['primary_viewer_id', 'viewer_id']) {
+      const value = root[key];
+      if (typeof value === 'string' && value.length > 0) ids.add(value);
+    }
+    const viewerIds = root['viewer_ids'];
+    if (Array.isArray(viewerIds)) {
+      for (const id of viewerIds) {
+        if (typeof id === 'string' && id.length > 0) ids.add(id);
+      }
+    }
+    return [...ids].filter(isPublisherViewerIdReal);
+  };
+
+  const resolvePublisherViewerId = (
+    signal: unknown,
+    currentViewerId: string | null,
+  ): string | null => {
+    if (isPublisherViewerIdReal(currentViewerId)) return currentViewerId;
+    const discovered = collectViewerIdsFromSignal(signal);
+    return discovered[0] || null;
+  };
+
   const publishPeerOffer = async (
     sessionRecord: { session_id: string },
     stream: MediaStream,
@@ -911,7 +944,7 @@ export default function ConnectDevicePage() {
     queuedViewerIceRef.current = [];
     viewerIceAddErrorsRef.current = [];
     deviceIcePublishedCountRef.current = 0;
-    activeViewerIdRef.current = 'viewer-broadcast';
+    activeViewerIdRef.current = null;
     markPublisherPeerDebug({
       peerCreatedAt,
       createdAt: peerCreatedAt,
@@ -993,7 +1026,7 @@ export default function ConnectDevicePage() {
         .publishLiveSignalIce(
           sessionId,
           'device',
-          activeViewerIdRef.current,
+          activeViewerIdRef.current || 'viewer-broadcast',
           event.candidate.toJSON(),
           nodeId || undefined,
         )
@@ -1101,11 +1134,42 @@ export default function ConnectDevicePage() {
       });
       void api
         .getLiveSignalState(sessionId)
-        .then(async (signal) => {
+        .then(async (initialSignal) => {
           const activePeer = peerConnectionRef.current;
           if (!activePeer || peerSessionIdRef.current !== sessionId) return;
-          if (signal.primary_viewer_id)
-            activeViewerIdRef.current = signal.primary_viewer_id;
+
+          const discoveredViewerIds = collectViewerIdsFromSignal(initialSignal);
+          const resolvedViewerId = resolvePublisherViewerId(
+            initialSignal,
+            activeViewerIdRef.current,
+          );
+
+          let signal = initialSignal;
+          if (
+            resolvedViewerId &&
+            resolvedViewerId !== activeViewerIdRef.current
+          ) {
+            activeViewerIdRef.current = resolvedViewerId;
+            markPublisherPeerDebug({
+              activeViewerId: resolvedViewerId,
+              discoveredViewerIds,
+              viewerIdResolution: 'signal-discovery',
+            });
+            signal = await api
+              .getLiveSignalState(sessionId, resolvedViewerId)
+              .catch(() => initialSignal);
+          }
+
+          markPublisherPeerDebug({
+            activeViewerId: activeViewerIdRef.current,
+            discoveredViewerIds,
+            answerSeen: Boolean(signal.answer?.sdp),
+            signalViewerIceCount: (signal.ice_from_viewer || []).length,
+            signalingState: activePeer.signalingState,
+            iceConnectionState: activePeer.iceConnectionState,
+            connectionState: activePeer.connectionState,
+          });
+
           if (
             signal.answer?.sdp &&
             !activePeer.currentRemoteDescription &&
@@ -1114,6 +1178,7 @@ export default function ConnectDevicePage() {
             markPublisherPeerDebug({
               answerSeenAt: Date.now(),
               answerSeen: true,
+              activeViewerId: activeViewerIdRef.current,
             });
             await activePeer.setRemoteDescription(
               new RTCSessionDescription(signal.answer),
@@ -1131,11 +1196,17 @@ export default function ConnectDevicePage() {
             markPublisherPeerDebug({
               answerAppliedAt: Date.now(),
               answerApplied: true,
+              viewerAnswerApplied: true,
+              activeViewerId: activeViewerIdRef.current,
               peerClosedBy: publisherPeerClosedByRef.current,
               signalingState: activePeer.signalingState,
               answerVideoDirection: extractMediaDirection(
                 signal.answer.sdp || '',
                 'video',
+              ),
+              answerAudioDirection: extractMediaDirection(
+                signal.answer.sdp || '',
+                'audio',
               ),
               ...summarizePeerSenders(activePeer),
               ...summarizePeerTransceivers(activePeer),
@@ -1145,6 +1216,7 @@ export default function ConnectDevicePage() {
             await applyViewerIceCandidate(candidate, 'poll');
           }
           await publishPublisherIceCandidateDebug({
+            activeViewerId: activeViewerIdRef.current,
             signalViewerIceCount: (signal.ice_from_viewer || []).length,
           });
         })
